@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -8,6 +9,12 @@ class AutonomyStage(str, Enum):
     RECOMMEND = "recommend"
     DRAFT = "draft"
     EXECUTE = "execute"
+
+
+class TrustLevel(str, Enum):
+    GREEN = "green"
+    YELLOW = "yellow"
+    RED = "red"
 
 
 class Relationship(BaseModel):
@@ -39,8 +46,13 @@ class DecisionRequest(BaseModel):
     reversible: bool = True
     consequence: Literal["low", "medium", "high"] = "low"
     contains_sensitive_data: bool = False
+    has_required_permission: bool = True
+    context_is_stale: bool = False
+    context_gap: bool = False
 
 
 class DecisionResponse(BaseModel):
     stage: AutonomyStage
+    trust: TrustLevel
+    summary: str
     reason: str
