@@ -1,4 +1,7 @@
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
+const mcpUrl = "https://atlas-ai-chief-of-staff.vercel.app/api/mcp";
+const atlasPrompt = `Start Atlas V2 for me now. Atlas MCP server: ${mcpUrl}. Check whether Atlas is available, guide me through only the minimum required setup, then call atlas_status and atlas_connection_health. Help me connect Gmail, Calendar, Contacts, Drive, Notion, and HubSpot where available. Start Learning Mode, then Shadow Mode. Keep output minimal: completed checkmarks, one blocker at a time, no long explanations unless I ask. Use Handled, Review, Needs you. Start now.`;
+const chatGptUrl = `https://chatgpt.com/?q=${encodeURIComponent(atlasPrompt)}`;
 
 const connectorLabel: Record<(typeof providers)[number], string> = {
   gmail: "Gmail",
@@ -47,9 +50,10 @@ export default function Home() {
           Atlas is the personal context, relationship memory, and trust layer that turns ChatGPT into a chief of staff that learns how you operate.
         </p>
         <div className="actions">
-          <a className="primaryAction" href="/setup">Enable Atlas</a>
-          <a href="#how">How it works</a>
+          <a className="primaryAction" href={chatGptUrl} target="_blank" rel="noreferrer">Start Atlas in ChatGPT →</a>
+          <a href="/setup">See how setup works</a>
         </div>
+        <p className="ctaMicrocopy">One tap opens ChatGPT with the Atlas setup prompt already loaded.</p>
       </section>
 
       <section className="panel">
