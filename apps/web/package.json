@@ -1,6 +1,6 @@
 {
   "name": "@atlas/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,11 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "mcp-handler": "^1.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "mcp-handler": "^2.0.0",
     "next": "15.5.21",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "zod": "^3.25.76"
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
