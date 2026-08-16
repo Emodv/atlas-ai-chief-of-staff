@@ -53,208 +53,242 @@ function chooseTrust(input: {
   };
 }
 
-const handler = createMcpHandler(
-  (server) => {
-    server.tool(
-      "atlas_status",
-      "Use this when you need to verify Atlas availability, version, operating mode, and readiness.",
-      {},
-      async () => {
-        const connections = providerConnections();
-        return {
-          content: [{ type: "text", text: "Atlas online ✓" }],
-          structuredContent: {
-            status: "online",
-            version: "2.1",
-            interface: "chatgpt-app-mcp",
-            principle: "signal-over-noise",
-            defaultUx: "silent-by-default",
-            durableMemory: Boolean(process.env.DATABASE_URL),
-            connectedSources: connections.filter((item) => item.configured).length,
-            expectedSources: connections.length,
-          },
-        };
-      },
-    );
+const readOnly = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
 
-    server.tool(
-      "atlas_connection_health",
-      "Use this during onboarding or debugging to report every Atlas source connection and the single next blocker.",
-      {},
-      async () => {
-        const connections = providerConnections();
-        const missing = connections.filter((item) => !item.configured);
-        return {
-          content: [{ type: "text", text: missing.length ? `${missing.length} connections need setup` : "Connections ✓" }],
-          structuredContent: {
-            connections,
-            allReady: missing.length === 0,
-            nextBlocker: missing[0]?.provider ?? null,
-            durableMemory: Boolean(process.env.DATABASE_URL),
-          },
-        };
-      },
-    );
+const internalWrite = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
 
-    server.tool(
-      "atlas_source_status",
-      "Use this when ChatGPT needs the status of one Atlas source before attempting any source-specific workflow.",
-      { provider: z.enum(providers) },
-      async ({ provider }: { provider: Provider }) => {
-        const configured = Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]);
-        return {
-          content: [{ type: "text", text: configured ? `${provider} ✓` : `${provider} needs connection` }],
-          structuredContent: {
-            provider,
-            configured,
-            trustState: configured ? "Handled" : "Needs you",
-            nextAction: configured ? "none" : "authorize-source",
-          },
-        };
-      },
-    );
+const handler = createMcpHandler((server) => {
+  server.registerTool(
+    "atlas_status",
+    {
+      title: "Atlas Status",
+      description: "Use this when you need to verify Atlas availability, version, operating mode, and readiness.",
+      inputSchema: z.object({}),
+      annotations: readOnly,
+    },
+    async () => {
+      const connections = providerConnections();
+      return {
+        content: [{ type: "text", text: "Atlas online ✓" }],
+        structuredContent: {
+          status: "online",
+          version: "2.2",
+          interface: "chatgpt-app-mcp",
+          principle: "signal-over-noise",
+          defaultUx: "silent-by-default",
+          durableMemory: Boolean(process.env.DATABASE_URL),
+          connectedSources: connections.filter((item) => item.configured).length,
+          expectedSources: connections.length,
+        },
+      };
+    },
+  );
 
-    server.tool(
-      "atlas_learning_mode",
-      "Use this after source access exists to start or inspect Learning Mode, where Atlas learns the user's tone, language, relationships, routines, preferences, and decision patterns without taking autonomous external actions.",
-      {
+  server.registerTool(
+    "atlas_connection_health",
+    {
+      title: "Atlas Connection Health",
+      description: "Use this during onboarding or debugging to report every Atlas source connection and the single next blocker.",
+      inputSchema: z.object({}),
+      annotations: readOnly,
+    },
+    async () => {
+      const connections = providerConnections();
+      const missing = connections.filter((item) => !item.configured);
+      return {
+        content: [{ type: "text", text: missing.length ? `${missing.length} connections need setup` : "Connections ✓" }],
+        structuredContent: {
+          connections,
+          allReady: missing.length === 0,
+          nextBlocker: missing[0]?.provider ?? null,
+          durableMemory: Boolean(process.env.DATABASE_URL),
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "atlas_source_status",
+    {
+      title: "Atlas Source Status",
+      description: "Use this when ChatGPT needs the status of one Atlas source before attempting any source-specific workflow.",
+      inputSchema: z.object({ provider: z.enum(providers) }),
+      annotations: readOnly,
+    },
+    async ({ provider }: { provider: Provider }) => {
+      const configured = Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]);
+      return {
+        content: [{ type: "text", text: configured ? `${provider} ✓` : `${provider} needs connection` }],
+        structuredContent: {
+          provider,
+          configured,
+          trustState: configured ? "Handled" : "Needs you",
+          nextAction: configured ? "none" : "authorize-source",
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "atlas_learning_mode",
+    {
+      title: "Atlas Learning Mode",
+      description: "Use this after source access exists to start, inspect, or stop Learning Mode. Learning Mode studies tone, language, relationships, routines, preferences, and decision patterns without autonomous external actions.",
+      inputSchema: z.object({
         action: z.enum(["start", "status", "stop"]).default("status"),
         focus: z.array(z.enum(["tone", "language", "relationships", "routines", "preferences", "decisions"])).optional(),
-      },
-      async ({ action, focus }) => {
-        const connections = providerConnections();
-        const connected = connections.filter((item) => item.configured).map((item) => item.provider);
-        const canStart = connected.length > 0;
-        const mode = action === "stop" ? "off" : canStart ? "learning" : "blocked";
-        return {
-          content: [{ type: "text", text: mode === "learning" ? "Learning Mode ✓" : mode === "off" ? "Learning Mode stopped" : "Needs source access" }],
-          structuredContent: {
-            requestedAction: action,
-            mode,
-            connectedSources: connected,
-            focus: focus ?? ["tone", "language", "relationships", "routines", "preferences", "decisions"],
-            autonomousActionsAllowed: false,
-            trustState: mode === "learning" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
-          },
-        };
-      },
-    );
+      }),
+      annotations: internalWrite,
+    },
+    async ({ action, focus }) => {
+      const connections = providerConnections();
+      const connected = connections.filter((item) => item.configured).map((item) => item.provider);
+      const canStart = connected.length > 0;
+      const mode = action === "stop" ? "off" : canStart ? "learning" : "blocked";
+      return {
+        content: [{ type: "text", text: mode === "learning" ? "Learning Mode ✓" : mode === "off" ? "Learning Mode stopped" : "Needs source access" }],
+        structuredContent: {
+          requestedAction: action,
+          mode,
+          connectedSources: connected,
+          focus: focus ?? ["tone", "language", "relationships", "routines", "preferences", "decisions"],
+          autonomousActionsAllowed: false,
+          trustState: mode === "learning" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+        },
+      };
+    },
+  );
 
-    server.tool(
-      "atlas_shadow_mode",
-      "Use this after Learning Mode to run Atlas in Shadow Mode. Atlas predicts what the user would do, but does not perform external actions; approve, edit, and reject outcomes become training signals.",
-      {
+  server.registerTool(
+    "atlas_shadow_mode",
+    {
+      title: "Atlas Shadow Mode",
+      description: "Use this after Learning Mode to start, inspect, or stop Shadow Mode. Atlas predicts what the user would do but performs no external actions.",
+      inputSchema: z.object({
         action: z.enum(["start", "status", "stop"]).default("status"),
         taskType: z.string().optional(),
-      },
-      async ({ action, taskType }) => {
-        const hasMemory = Boolean(process.env.DATABASE_URL);
-        const connections = providerConnections();
-        const connected = connections.some((item) => item.configured);
-        const canStart = connected;
-        const mode = action === "stop" ? "off" : canStart ? "shadow" : "blocked";
-        return {
-          content: [{ type: "text", text: mode === "shadow" ? "Shadow Mode ✓" : mode === "off" ? "Shadow Mode stopped" : "Needs source access" }],
-          structuredContent: {
-            requestedAction: action,
-            mode,
-            taskType: taskType ?? null,
-            externalActionsAllowed: false,
-            correctionPersistence: hasMemory ? "durable" : "ephemeral",
-            trustState: mode === "shadow" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
-          },
-        };
-      },
-    );
+      }),
+      annotations: internalWrite,
+    },
+    async ({ action, taskType }) => {
+      const hasMemory = Boolean(process.env.DATABASE_URL);
+      const connected = providerConnections().some((item) => item.configured);
+      const mode = action === "stop" ? "off" : connected ? "shadow" : "blocked";
+      return {
+        content: [{ type: "text", text: mode === "shadow" ? "Shadow Mode ✓" : mode === "off" ? "Shadow Mode stopped" : "Needs source access" }],
+        structuredContent: {
+          requestedAction: action,
+          mode,
+          taskType: taskType ?? null,
+          externalActionsAllowed: false,
+          correctionPersistence: hasMemory ? "durable" : "ephemeral",
+          trustState: mode === "shadow" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+        },
+      };
+    },
+  );
 
-    server.tool(
-      "atlas_build_context_packet",
-      "Use this when ChatGPT needs Atlas to turn source evidence into a minimal, relationship-aware context packet before replying or deciding what to do.",
-      {
+  server.registerTool(
+    "atlas_build_context_packet",
+    {
+      title: "Build Atlas Context",
+      description: "Use this when ChatGPT needs Atlas to turn source evidence into a concise, relationship-aware context packet before replying or deciding what to do.",
+      inputSchema: z.object({
         task: z.string().min(1),
         contact: z.string().optional(),
         relationshipType: z.string().optional(),
         preferredLanguage: z.string().optional(),
-        evidence: z.array(
-          z.object({
-            source: z.string(),
-            fact: z.string(),
-            freshness: z.enum(["fresh", "aging", "stale"]).default("fresh"),
-          }),
-        ).max(40),
+        evidence: z.array(z.object({
+          source: z.string(),
+          fact: z.string(),
+          freshness: z.enum(["fresh", "aging", "stale"]).default("fresh"),
+        })).max(40),
         openLoops: z.array(z.string()).max(20).default([]),
-      },
-      async ({ task, contact, relationshipType, preferredLanguage, evidence, openLoops }) => {
-        const stale = evidence.filter((item) => item.freshness === "stale").length;
-        const strong = evidence.length >= 2 && stale === 0;
-        return {
-          content: [{ type: "text", text: strong ? "Context ready ✓" : "Context needs review" }],
-          structuredContent: {
-            task,
-            person: contact ?? null,
-            relationshipType: relationshipType ?? "unknown",
-            replyLanguage: preferredLanguage ?? "match-contact",
-            evidence,
-            openLoops,
-            evidenceQuality: strong ? "strong" : evidence.length ? "mixed" : "weak",
-            instructions: [
-              "Use only relevant evidence.",
-              "Match the user's relationship-specific tone and language.",
-              "Prefer concise action over narration.",
-              "Do not reuse secrets or sensitive identifiers.",
-            ],
-          },
-        };
-      },
-    );
+      }),
+      annotations: readOnly,
+    },
+    async ({ task, contact, relationshipType, preferredLanguage, evidence, openLoops }) => {
+      const stale = evidence.filter((item) => item.freshness === "stale").length;
+      const strong = evidence.length >= 2 && stale === 0;
+      return {
+        content: [{ type: "text", text: strong ? "Context ready ✓" : "Context needs review" }],
+        structuredContent: {
+          task,
+          person: contact ?? null,
+          relationshipType: relationshipType ?? "unknown",
+          replyLanguage: preferredLanguage ?? "match-contact",
+          evidence,
+          openLoops,
+          evidenceQuality: strong ? "strong" : evidence.length ? "mixed" : "weak",
+          instructions: [
+            "Use only relevant evidence.",
+            "Match the user's relationship-specific tone and language.",
+            "Prefer concise action over narration.",
+            "Do not reuse secrets or sensitive identifiers.",
+          ],
+        },
+      };
+    },
+  );
 
-    server.tool(
-      "atlas_trust_gate",
-      "Use this before an external action. Converts action risk and evidence into Handled, Review, or Needs you.",
-      {
+  server.registerTool(
+    "atlas_trust_gate",
+    {
+      title: "Atlas Trust Gate",
+      description: "Use this before an external action. Converts action risk and evidence into Handled, Review, or Needs you.",
+      inputSchema: z.object({
         reversible: z.boolean(),
         consequence: z.enum(["low", "medium", "high"]),
         permissionAvailable: z.boolean(),
         evidenceQuality: z.enum(["strong", "mixed", "weak"]),
         sensitive: z.boolean().default(false),
-      },
-      async (input) => {
-        const result = chooseTrust(input);
-        const label = result.trust === "GREEN" ? "Handled" : result.trust === "YELLOW" ? "Review" : "Needs you";
-        return {
-          content: [{ type: "text", text: label }],
-          structuredContent: { ...result, label },
-        };
-      },
-    );
+      }),
+      annotations: readOnly,
+    },
+    async (input) => {
+      const result = chooseTrust(input);
+      const label = result.trust === "GREEN" ? "Handled" : result.trust === "YELLOW" ? "Review" : "Needs you";
+      return {
+        content: [{ type: "text", text: label }],
+        structuredContent: { ...result, label },
+      };
+    },
+  );
 
-    server.tool(
-      "atlas_record_correction",
-      "Use this when the user approves, edits, rejects, or replaces an Atlas prediction so the Digital Twin can learn the difference.",
-      {
+  server.registerTool(
+    "atlas_record_correction",
+    {
+      title: "Record Atlas Correction",
+      description: "Use this when the user approves, edits, rejects, or replaces an Atlas prediction so the Digital Twin can learn the difference.",
+      inputSchema: z.object({
         taskType: z.string().min(1),
         outcome: z.enum(["accepted", "edited", "rejected", "different_action"]),
         whatAtlasPredicted: z.string().optional(),
         whatUserDid: z.string().optional(),
         correctionReason: z.string().optional(),
         relationshipKey: z.string().optional(),
-      },
-      async (input) => ({
-        content: [{ type: "text", text: "Learned ✓" }],
-        structuredContent: {
-          recorded: true,
-          ...input,
-          storage: process.env.DATABASE_URL ? "database-configured" : "ephemeral-until-persistence-wiring",
-        },
       }),
-    );
-  },
-  {
-    capabilities: {},
-    instructions:
-      "Atlas is a ChatGPT-native personalization and execution-policy layer. Keep onboarding minimal. Retrieve personal evidence before acting. Use Handled for safe/reversible/permitted actions, Review for ambiguity, and Needs you for sensitive, high-consequence, or unavailable-permission actions. Never expose credentials or secrets.",
-  },
-  { basePath: "/api" },
-);
+      annotations: internalWrite,
+    },
+    async (input) => ({
+      content: [{ type: "text", text: "Learned ✓" }],
+      structuredContent: {
+        recorded: true,
+        ...input,
+        storage: process.env.DATABASE_URL ? "database-configured" : "ephemeral-until-persistence-wiring",
+      },
+    }),
+  );
+});
 
-export { handler as GET, handler as POST, handler as DELETE };
+export { handler as GET, handler as POST };
