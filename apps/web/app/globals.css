@@ -14,9 +14,10 @@ h1 { font-size: clamp(48px, 8vw, 88px); line-height: .98; letter-spacing: -.055e
 h2 { font-size: clamp(30px, 4vw, 48px); letter-spacing: -.035em; margin: 10px 0 12px; }
 h3 { margin: 18px 0 8px; font-size: 22px; }
 p { color: #aeb7c4; line-height: 1.65; }
+code { color:#e8edf5; background:#11151d; border:1px solid #242a34; padding:4px 7px; border-radius:8px; overflow-wrap:anywhere; }
 .lede { font-size: 21px; max-width: 760px; }
 .actions { display:flex; gap:18px; align-items:center; margin-top:32px; }
-button { background:#f2f5f8; color:#0b0d11; border:0; border-radius:999px; padding:14px 22px; font-weight:700; cursor:pointer; }
+button,.primaryAction { background:#f2f5f8; color:#0b0d11; border:0; border-radius:999px; padding:14px 22px; font-weight:700; cursor:pointer; display:inline-block; }
 a { color:#d9dfe8; text-decoration:none; }
 .panel,.twin { display:grid; grid-template-columns:1.2fr 1fr; gap:36px; padding:34px; border:1px solid #252b36; background:rgba(18,22,31,.72); border-radius:24px; }
 .signal { align-self:center; padding:24px; border-radius:18px; background:#0e1219; border:1px solid #222936; display:flex; flex-direction:column; gap:8px; }
@@ -27,6 +28,7 @@ a { color:#d9dfe8; text-decoration:none; }
 .microcopy { color:#7f8997; font-size:14px; padding-bottom:14px; }
 .connectorGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:18px; }
 .connector { padding:18px; border-radius:16px; border:1px solid #242a34; background:#11151d; display:flex; gap:10px; align-items:center; }
+.connector.connected { border-color:#2f684a; }
 .connector.review { border-color:#4c4427; }
 .connector.missing { border-color:#482a2e; }
 .statusIcon { width:20px; text-align:center; }
