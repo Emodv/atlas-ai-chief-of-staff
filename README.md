@@ -10,10 +10,28 @@ Atlas is the personalization, memory, relationship, and execution layer that mak
 
 Atlas does not try to replace ChatGPT. It wraps durable personal context and controlled execution around it.
 
+## ChatGPT-native MCP bridge
+
+Atlas now exposes a remote MCP surface from the Next.js app at:
+
+`/api/mcp`
+
+Current tools:
+
+- `atlas_status`
+- `atlas_connection_health`
+- `atlas_build_context_packet`
+- `atlas_trust_gate`
+- `atlas_record_correction`
+
+This removes the manual reasoning/policy gap: ChatGPT can call Atlas directly for context shaping, Green/Yellow/Red trust gating, and correction learning. Atlas-owned OAuth connectors are the next step required to remove the remaining data-access handoff between ChatGPT connectors and the Atlas server.
+
+See `docs/CHATGPT_MCP.md`.
+
 ## Intended user journey
 
 1. User opens ChatGPT and enables Atlas.
-2. Atlas checks available connections and permissions.
+2. ChatGPT calls `atlas_status` and Atlas checks available connections and permissions.
 3. The user connects Gmail, Calendar, Contacts, Drive, Notion, HubSpot, and other supported tools.
 4. Atlas shows a minimal connection-health checklist: ✅ connected, ⚠️ needs attention, ❌ blocked.
 5. Learning Mode ingests a bounded historical sample and builds:
@@ -26,7 +44,7 @@ Atlas does not try to replace ChatGPT. It wraps durable personal context and con
 7. Safe categories graduate to autonomous handling.
 8. ChatGPT remains the conversational surface; Atlas stays quiet unless something needs the user.
 
-> The GitHub URL is the product source, not executable magic by itself. The production ChatGPT-native path is an Atlas remote MCP / ChatGPT app integration plus OAuth-backed connectors.
+> The GitHub URL is the product source, not executable magic by itself. The production ChatGPT-native path is the Atlas remote MCP integration plus OAuth-backed connectors.
 
 ## Trust model — no meaningless percentages in the UI
 
@@ -56,7 +74,7 @@ No paragraph is shown unless the user asks for detail.
 
 ## Core architecture
 
-`ChatGPT → Atlas Context/Trust Layer → Connected tools`
+`ChatGPT → Atlas MCP Context/Trust Layer → Atlas-owned connectors`
 
 Atlas contains:
 
@@ -84,11 +102,11 @@ See `docs/GBRAIN_REVIEW.md`.
 
 ## Repository
 
-- `apps/web` — optional onboarding/admin + minimal executive-status UI
+- `apps/web` — ChatGPT MCP endpoint + optional onboarding/admin + minimal executive-status UI
 - `services/api` — Atlas API, twin engine, trust engine, memory/context layer
 - `packages/core` — shared domain types and connector contracts
 - `infra` — Postgres schema + local infrastructure
-- `docs` — product, ChatGPT-native architecture, GBrain review, roadmap
+- `docs` — product, ChatGPT-native architecture, MCP bridge, GBrain review, roadmap
 
 ## First product milestone
 
@@ -103,4 +121,4 @@ A new user can connect Google, Atlas learns from historical communication, and C
 
 ## Status
 
-**Atlas V2 — active build.** Foundation exists; OAuth connectors, durable ingestion, ChatGPT/MCP integration, identity resolution, and shadow-mode correction learning are the next production milestones.
+**Atlas V2 — active build.** ChatGPT-native MCP endpoint is implemented. Deployment + ChatGPT connection and Atlas-owned OAuth connectors are the next production milestones.
