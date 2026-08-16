@@ -9,6 +9,16 @@ const TRUST = {
 
 type Trust = (typeof TRUST)[keyof typeof TRUST];
 
+const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
+type Provider = (typeof providers)[number];
+
+function providerConnections() {
+  return providers.map((provider) => ({
+    provider,
+    configured: Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]),
+  }));
+}
+
 function chooseTrust(input: {
   reversible: boolean;
   consequence: "low" | "medium" | "high";
@@ -47,46 +57,112 @@ const handler = createMcpHandler(
   (server) => {
     server.tool(
       "atlas_status",
-      "Use this when you need to verify that the Atlas personalization layer is reachable and understand its current operating mode.",
+      "Use this when you need to verify Atlas availability, version, operating mode, and readiness.",
       {},
-      async () => ({
-        content: [
-          {
-            type: "text",
-            text: "Atlas online. ChatGPT is the reasoning surface; Atlas provides personal context, relationship memory, trust gating, and execution policy.",
+      async () => {
+        const connections = providerConnections();
+        return {
+          content: [{ type: "text", text: "Atlas online ✓" }],
+          structuredContent: {
+            status: "online",
+            version: "2.1",
+            interface: "chatgpt-app-mcp",
+            principle: "signal-over-noise",
+            defaultUx: "silent-by-default",
+            durableMemory: Boolean(process.env.DATABASE_URL),
+            connectedSources: connections.filter((item) => item.configured).length,
+            expectedSources: connections.length,
           },
-        ],
-        structuredContent: {
-          status: "online",
-          version: "2.0",
-          interface: "chatgpt-native-mcp",
-          principle: "signal-over-noise",
-          defaultUx: "silent-by-default",
-        },
-      }),
+        };
+      },
     );
 
     server.tool(
       "atlas_connection_health",
-      "Use this when onboarding or debugging Atlas connections. Reports the expected personal-data sources and whether Atlas has server-side access configured for each one.",
+      "Use this during onboarding or debugging to report every Atlas source connection and the single next blocker.",
       {},
       async () => {
-        const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
-        const connections = providers.map((provider) => ({
-          provider,
-          configured: Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]),
-        }));
-
+        const connections = providerConnections();
+        const missing = connections.filter((item) => !item.configured);
         return {
-          content: [
-            {
-              type: "text",
-              text: connections.every((item) => item.configured)
-                ? "Connections ✓"
-                : "Some Atlas server-side connections still need OAuth/configuration.",
-            },
-          ],
-          structuredContent: { connections },
+          content: [{ type: "text", text: missing.length ? `${missing.length} connections need setup` : "Connections ✓" }],
+          structuredContent: {
+            connections,
+            allReady: missing.length === 0,
+            nextBlocker: missing[0]?.provider ?? null,
+            durableMemory: Boolean(process.env.DATABASE_URL),
+          },
+        };
+      },
+    );
+
+    server.tool(
+      "atlas_source_status",
+      "Use this when ChatGPT needs the status of one Atlas source before attempting any source-specific workflow.",
+      { provider: z.enum(providers) },
+      async ({ provider }: { provider: Provider }) => {
+        const configured = Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]);
+        return {
+          content: [{ type: "text", text: configured ? `${provider} ✓` : `${provider} needs connection` }],
+          structuredContent: {
+            provider,
+            configured,
+            trustState: configured ? "Handled" : "Needs you",
+            nextAction: configured ? "none" : "authorize-source",
+          },
+        };
+      },
+    );
+
+    server.tool(
+      "atlas_learning_mode",
+      "Use this after source access exists to start or inspect Learning Mode, where Atlas learns the user's tone, language, relationships, routines, preferences, and decision patterns without taking autonomous external actions.",
+      {
+        action: z.enum(["start", "status", "stop"]).default("status"),
+        focus: z.array(z.enum(["tone", "language", "relationships", "routines", "preferences", "decisions"])).optional(),
+      },
+      async ({ action, focus }) => {
+        const connections = providerConnections();
+        const connected = connections.filter((item) => item.configured).map((item) => item.provider);
+        const canStart = connected.length > 0;
+        const mode = action === "stop" ? "off" : canStart ? "learning" : "blocked";
+        return {
+          content: [{ type: "text", text: mode === "learning" ? "Learning Mode ✓" : mode === "off" ? "Learning Mode stopped" : "Needs source access" }],
+          structuredContent: {
+            requestedAction: action,
+            mode,
+            connectedSources: connected,
+            focus: focus ?? ["tone", "language", "relationships", "routines", "preferences", "decisions"],
+            autonomousActionsAllowed: false,
+            trustState: mode === "learning" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+          },
+        };
+      },
+    );
+
+    server.tool(
+      "atlas_shadow_mode",
+      "Use this after Learning Mode to run Atlas in Shadow Mode. Atlas predicts what the user would do, but does not perform external actions; approve, edit, and reject outcomes become training signals.",
+      {
+        action: z.enum(["start", "status", "stop"]).default("status"),
+        taskType: z.string().optional(),
+      },
+      async ({ action, taskType }) => {
+        const hasMemory = Boolean(process.env.DATABASE_URL);
+        const connections = providerConnections();
+        const connected = connections.some((item) => item.configured);
+        const canStart = connected;
+        const mode = action === "stop" ? "off" : canStart ? "shadow" : "blocked";
+        return {
+          content: [{ type: "text", text: mode === "shadow" ? "Shadow Mode ✓" : mode === "off" ? "Shadow Mode stopped" : "Needs source access" }],
+          structuredContent: {
+            requestedAction: action,
+            mode,
+            taskType: taskType ?? null,
+            externalActionsAllowed: false,
+            correctionPersistence: hasMemory ? "durable" : "ephemeral",
+            trustState: mode === "shadow" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+          },
         };
       },
     );
@@ -111,14 +187,8 @@ const handler = createMcpHandler(
       async ({ task, contact, relationshipType, preferredLanguage, evidence, openLoops }) => {
         const stale = evidence.filter((item) => item.freshness === "stale").length;
         const strong = evidence.length >= 2 && stale === 0;
-
         return {
-          content: [
-            {
-              type: "text",
-              text: strong ? "Context ready ✓" : "Context needs review",
-            },
-          ],
+          content: [{ type: "text", text: strong ? "Context ready ✓" : "Context needs review" }],
           structuredContent: {
             task,
             person: contact ?? null,
@@ -140,7 +210,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "atlas_trust_gate",
-      "Use this before an external action. Converts internal confidence/risk signals into a human-readable GREEN, YELLOW, or RED trust decision.",
+      "Use this before an external action. Converts action risk and evidence into Handled, Review, or Needs you.",
       {
         reversible: z.boolean(),
         consequence: z.enum(["low", "medium", "high"]),
@@ -150,9 +220,10 @@ const handler = createMcpHandler(
       },
       async (input) => {
         const result = chooseTrust(input);
+        const label = result.trust === "GREEN" ? "Handled" : result.trust === "YELLOW" ? "Review" : "Needs you";
         return {
-          content: [{ type: "text", text: `${result.trust} — ${result.action}` }],
-          structuredContent: result,
+          content: [{ type: "text", text: label }],
+          structuredContent: { ...result, label },
         };
       },
     );
@@ -181,7 +252,7 @@ const handler = createMcpHandler(
   {
     capabilities: {},
     instructions:
-      "Atlas is a personalization and execution-policy layer for ChatGPT. Retrieve personal evidence before acting. Keep user-facing output minimal. Use GREEN for safe/reversible/permitted actions, YELLOW for review, RED when the user is required. Never expose credentials or secrets.",
+      "Atlas is a ChatGPT-native personalization and execution-policy layer. Keep onboarding minimal. Retrieve personal evidence before acting. Use Handled for safe/reversible/permitted actions, Review for ambiguity, and Needs you for sensitive, high-consequence, or unavailable-permission actions. Never expose credentials or secrets.",
   },
   { basePath: "/api" },
 );
