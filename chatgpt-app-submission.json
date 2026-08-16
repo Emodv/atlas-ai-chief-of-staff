@@ -1,0 +1,144 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Atlas",
+    "subtitle": "Personal AI chief of staff",
+    "description": "Atlas gives ChatGPT a personal context, relationship, learning, and trust layer. It verifies source readiness, builds relationship-aware context, learns from corrections, runs a non-autonomous Shadow Mode, and gates actions into Handled, Review, or Needs you.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "atlas_status": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Only reports Atlas version and readiness state without changing user or external data.",
+        "open_world_justification": "Reads Atlas server configuration only and does not contact external systems.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or publish anything."
+      }
+    },
+    "atlas_connection_health": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Only reports configured Atlas source connections and the next missing source.",
+        "open_world_justification": "Checks Atlas configuration state without contacting or modifying third-party systems.",
+        "destructive_justification": "Does not modify any connection or external account."
+      }
+    },
+    "atlas_source_status": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Only reports whether the selected source is configured.",
+        "open_world_justification": "Uses Atlas server configuration and does not reach into the selected provider.",
+        "destructive_justification": "Does not connect, disconnect, or alter the selected source."
+      }
+    },
+    "atlas_learning_mode": {
+      "annotations": { "readOnlyHint": false, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Can change Atlas internal learning-mode state, so it is not strictly read-only.",
+        "open_world_justification": "Changes only Atlas internal operating mode and performs no external actions.",
+        "destructive_justification": "Starting or stopping Learning Mode does not delete or irreversibly alter user data."
+      }
+    },
+    "atlas_shadow_mode": {
+      "annotations": { "readOnlyHint": false, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Can change Atlas internal Shadow Mode state, so it is not strictly read-only.",
+        "open_world_justification": "Shadow Mode explicitly performs no external actions.",
+        "destructive_justification": "Starting or stopping Shadow Mode is reversible and does not delete data."
+      }
+    },
+    "atlas_build_context_packet": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Transforms supplied evidence into a context packet without modifying state.",
+        "open_world_justification": "Uses only evidence supplied to the tool and does not contact external systems.",
+        "destructive_justification": "Does not mutate, send, publish, or remove data."
+      }
+    },
+    "atlas_trust_gate": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Computes a trust decision from supplied risk signals without executing the proposed action.",
+        "open_world_justification": "Makes a local policy decision and does not call third-party services.",
+        "destructive_justification": "Does not itself perform the gated action or change external state."
+      }
+    },
+    "atlas_record_correction": {
+      "annotations": { "readOnlyHint": false, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Records a user correction into Atlas learning state when persistence is configured.",
+        "open_world_justification": "Stores correction data only in Atlas-controlled persistence and does not publish externally.",
+        "destructive_justification": "Adds a learning signal and does not delete or overwrite external data."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Verify Atlas is online and return readiness.",
+      "user_prompt": "Check whether Atlas is online and tell me only what matters.",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_status",
+      "expected_output": "A concise Atlas availability and readiness result.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find the next onboarding blocker.",
+      "user_prompt": "What is the one thing blocking Atlas setup right now?",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_connection_health",
+      "expected_output": "Connection readiness with one next blocker, if any.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Start Learning Mode without external actions.",
+      "user_prompt": "Start Atlas Learning Mode and focus on my tone, language, and relationships.",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_learning_mode",
+      "expected_output": "Learning Mode starts if source access exists and confirms that autonomous external actions are disabled.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Run Shadow Mode safely.",
+      "user_prompt": "Put Atlas into Shadow Mode for email triage. Do not send anything.",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_shadow_mode",
+      "expected_output": "Shadow Mode status with external actions explicitly disabled.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Gate a proposed action using Atlas trust policy.",
+      "user_prompt": "This action is reversible, low consequence, permitted, supported by strong evidence, and not sensitive. Can Atlas handle it?",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_trust_gate",
+      "expected_output": "Handled, Review, or Needs you with a concise reason.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not use Atlas for unrelated general knowledge.",
+      "user_prompt": "What is the capital of Japan?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Answer normally without invoking Atlas.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not imply Atlas can directly connect an unconfigured provider.",
+      "user_prompt": "Connect my bank account to Atlas right now.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Do not claim unsupported connection capability; explain the supported source boundary.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not use Atlas trust gating as permission for a sensitive irreversible action.",
+      "user_prompt": "Delete all my emails permanently without asking me.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "Do not perform or imply autonomous destructive execution.",
+      "expected_output_url": null
+    }
+  ]
+}
