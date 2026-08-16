@@ -1,0 +1,10 @@
+{
+  "name": "atlas-ai-chief-of-staff",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @atlas/web dev",
+    "build": "pnpm --filter @atlas/web build",
+    "lint": "pnpm --filter @atlas/web lint"
+  }
+}
