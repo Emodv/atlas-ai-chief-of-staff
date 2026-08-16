@@ -1,4 +1,4 @@
-from .models import AutonomyStage, DecisionRequest, DecisionResponse
+from .models import AutonomyStage, DecisionRequest, DecisionResponse, TrustLevel
 
 
 BLOCKED_TASK_FRAGMENTS = {
@@ -12,56 +12,95 @@ BLOCKED_TASK_FRAGMENTS = {
 }
 
 
-def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
-    """Choose how far Atlas may go for a task.
+def _response(
+    stage: AutonomyStage,
+    trust: TrustLevel,
+    summary: str,
+    reason: str,
+) -> DecisionResponse:
+    return DecisionResponse(stage=stage, trust=trust, summary=summary, reason=reason)
 
-    The policy deliberately favors reversible action while preserving a hard
-    boundary around consequential or sensitive decisions. This module should
-    remain deterministic and testable even when the reasoning layer later uses
-    an LLM.
+
+def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
+    """Choose how far Atlas may go while exposing only human trust buckets.
+
+    Internal confidence remains numeric for evaluation. Users see Green, Yellow,
+    or Red. Risk, missing permissions, stale context, and knowledge gaps can
+    always downgrade the trust bucket regardless of model confidence.
     """
 
     normalized_task = request.task_type.lower().replace(" ", "_")
 
+    if not request.has_required_permission:
+        return _response(
+            AutonomyStage.SURFACE,
+            TrustLevel.RED,
+            "Needs you",
+            "Required connector permission is missing.",
+        )
+
     if request.contains_sensitive_data:
-        return DecisionResponse(
-            stage=AutonomyStage.SURFACE,
-            reason="Sensitive data requires explicit human attention.",
+        return _response(
+            AutonomyStage.SURFACE,
+            TrustLevel.RED,
+            "Needs you",
+            "Sensitive data requires explicit human attention.",
         )
 
     if request.consequence == "high" or any(
         fragment in normalized_task for fragment in BLOCKED_TASK_FRAGMENTS
     ):
-        return DecisionResponse(
-            stage=AutonomyStage.SURFACE,
-            reason="High-consequence category is not eligible for autonomous execution.",
+        return _response(
+            AutonomyStage.SURFACE,
+            TrustLevel.RED,
+            "Needs you",
+            "High-consequence category is not eligible for autonomous execution.",
+        )
+
+    if request.context_gap:
+        return _response(
+            AutonomyStage.SURFACE,
+            TrustLevel.RED,
+            "Needs you",
+            "Atlas is missing context required to act safely.",
+        )
+
+    if request.context_is_stale:
+        return _response(
+            AutonomyStage.RECOMMEND,
+            TrustLevel.YELLOW,
+            "Review",
+            "The relevant context may be stale, so Atlas will not act autonomously.",
         )
 
     if not request.reversible:
-        return DecisionResponse(
-            stage=AutonomyStage.RECOMMEND,
-            reason="Irreversible action requires human approval.",
+        return _response(
+            AutonomyStage.RECOMMEND,
+            TrustLevel.YELLOW,
+            "Review",
+            "The action is not safely reversible.",
         )
 
-    if request.confidence >= 0.97 and request.consequence == "low":
-        return DecisionResponse(
-            stage=AutonomyStage.EXECUTE,
-            reason="High confidence, low consequence, and reversible.",
+    if request.confidence >= 0.85 and request.consequence == "low":
+        return _response(
+            AutonomyStage.EXECUTE,
+            TrustLevel.GREEN,
+            "Handled",
+            "Pattern is familiar, consequence is low, and the action is reversible.",
         )
 
-    if request.confidence >= 0.85:
-        return DecisionResponse(
-            stage=AutonomyStage.DRAFT,
-            reason="Confidence is strong enough to prepare the action but not execute it.",
+    if request.confidence >= 0.50:
+        stage = AutonomyStage.DRAFT if request.consequence == "low" else AutonomyStage.RECOMMEND
+        return _response(
+            stage,
+            TrustLevel.YELLOW,
+            "Review",
+            "Atlas has a useful prediction but should not execute it without review.",
         )
 
-    if request.confidence >= 0.65:
-        return DecisionResponse(
-            stage=AutonomyStage.RECOMMEND,
-            reason="Atlas has a useful prediction but needs confirmation.",
-        )
-
-    return DecisionResponse(
-        stage=AutonomyStage.SURFACE,
-        reason="Confidence is too low; preserve signal without guessing.",
+    return _response(
+        AutonomyStage.SURFACE,
+        TrustLevel.RED,
+        "Needs you",
+        "Atlas is not sure enough to guess.",
     )
