@@ -1,6 +1,5 @@
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
-const mcpUrl = "https://atlas-ai-chief-of-staff.vercel.app/api/mcp";
-const atlasPrompt = `Start Atlas V2 for me now. Atlas MCP server: ${mcpUrl}. Check whether Atlas is available, guide me through only the minimum required setup, then call atlas_status and atlas_connection_health. Help me connect Gmail, Calendar, Contacts, Drive, Notion, and HubSpot where available. Start Learning Mode, then Shadow Mode. Keep output minimal: completed checkmarks, one blocker at a time, no long explanations unless I ask. Use Handled, Review, Needs you. Start now.`;
+const atlasPrompt = `Open Atlas for me. If Atlas is installed in this ChatGPT account, run atlas_status and atlas_connection_health and continue onboarding one blocker at a time. If Atlas is not installed, tell me clearly and stop. Do not ask me to copy or paste an MCP URL.`;
 const chatGptUrl = `https://chatgpt.com/?q=${encodeURIComponent(atlasPrompt)}`;
 
 const connectorLabel: Record<(typeof providers)[number], string> = {
@@ -13,10 +12,10 @@ const connectorLabel: Record<(typeof providers)[number], string> = {
 };
 
 const stages = [
-  ["1", "Connect", "Atlas checks access to the tools that already know your life and work."],
-  ["2", "Learn", "It builds your Digital Twin, language patterns, relationships, rhythms, and boundaries."],
-  ["3", "Shadow", "It predicts what you would do and learns from approve, edit, and reject."],
-  ["4", "Handle", "Safe familiar noise becomes automatic. ChatGPT stays the main interface."],
+  ["1", "Connect", "Authorize the tools that already know your life and work."],
+  ["2", "Learn", "Atlas learns language, tone, relationships, routines, and preferences."],
+  ["3", "Shadow", "Atlas predicts what you would do without taking external actions."],
+  ["4", "Handle", "Only familiar, low-risk work graduates to safe autonomy."],
 ];
 
 export default function Home() {
@@ -35,10 +34,11 @@ export default function Home() {
   const databaseConfigured = Boolean(process.env.DATABASE_URL);
 
   const statusRows = [
-    ["MCP server", "green", "✅", "Online", "The production Atlas MCP endpoint is deployed and reachable."],
-    ["Connectors", connected === providers.length ? "green" : "yellow", connected === providers.length ? "✅" : "⚠️", `${connected}/${providers.length} ready`, "Server-side OAuth/configuration is required before Atlas can act independently on each source."],
+    ["MCP backend", "green", "✅", "Online", "The production Atlas MCP backend is deployed and reachable."],
+    ["ChatGPT App", "yellow", "⚠️", "Distribution", "Atlas is being packaged for normal ChatGPT App distribution. The raw MCP URL is not part of the customer onboarding flow."],
+    ["Connectors", connected === providers.length ? "green" : "yellow", connected === providers.length ? "✅" : "⚠️", `${connected}/${providers.length} ready`, "OAuth and production credentials are required before Atlas can act independently on each source."],
     ["Durable memory", databaseConfigured ? "green" : "yellow", databaseConfigured ? "✅" : "⚠️", databaseConfigured ? "Ready" : "Configure", "Corrections and durable user state require a production database connection."],
-    ["Trust engine", "green", "✅", "Ready", "Every external action is routed through Handled, Review, or Needs you."],
+    ["Trust engine", "green", "✅", "Ready", "Every proposed action is routed through Handled, Review, or Needs you."],
   ];
 
   return (
@@ -46,14 +46,12 @@ export default function Home() {
       <section className="hero">
         <span className="eyebrow">ATLAS V2 · CHATGPT-NATIVE</span>
         <h1>ChatGPT, but deeply yours.</h1>
-        <p className="lede">
-          Atlas is the personal context, relationship memory, and trust layer that turns ChatGPT into a chief of staff that learns how you operate.
-        </p>
+        <p className="lede">Atlas is the personal context, relationship memory, and trust layer that turns ChatGPT into a chief of staff that learns how you operate.</p>
         <div className="actions">
-          <a className="primaryAction" href={chatGptUrl} target="_blank" rel="noreferrer">Start Atlas in ChatGPT →</a>
-          <a href="/setup">See how setup works</a>
+          <a className="primaryAction" href={chatGptUrl} target="_blank" rel="noreferrer">Open Atlas in ChatGPT →</a>
+          <a href="/setup">Setup status</a>
         </div>
-        <p className="ctaMicrocopy">One tap opens ChatGPT with the Atlas setup prompt already loaded.</p>
+        <p className="ctaMicrocopy">No MCP URL in the customer flow. If Atlas is not installed in the account yet, ChatGPT stops cleanly instead of sending the user through developer setup.</p>
       </section>
 
       <section className="panel">
@@ -120,9 +118,7 @@ export default function Home() {
           <span className="label">The moat</span>
           <h2>Digital Twin + Relationship Graph + Durable Brain</h2>
         </div>
-        <p>
-          Atlas retrieves personal evidence first, adapts behavior by relationship and language, detects stale or missing context, and routes every action through a simple trust state: Handled, Review, or Needs you.
-        </p>
+        <p>Atlas retrieves personal evidence first, adapts behavior by relationship and language, detects stale or missing context, and routes every action through a simple trust state: Handled, Review, or Needs you.</p>
       </section>
     </main>
   );
