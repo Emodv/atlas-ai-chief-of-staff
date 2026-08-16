@@ -1,11 +1,13 @@
-const connectors = [
-  ["Gmail", "connected", "✅"],
-  ["Calendar", "connected", "✅"],
-  ["Contacts", "connected", "✅"],
-  ["Drive", "review", "⚠️"],
-  ["Notion", "connected", "✅"],
-  ["HubSpot", "missing", "❌"],
-];
+const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
+
+const connectorLabel: Record<(typeof providers)[number], string> = {
+  gmail: "Gmail",
+  calendar: "Calendar",
+  contacts: "Contacts",
+  drive: "Drive",
+  notion: "Notion",
+  hubspot: "HubSpot",
+};
 
 const stages = [
   ["1", "Connect", "Atlas checks access to the tools that already know your life and work."],
@@ -14,25 +16,38 @@ const stages = [
   ["4", "Handle", "Safe familiar noise becomes automatic. ChatGPT stays the main interface."],
 ];
 
-const statusRows = [
-  ["Email", "green", "✅", "Done", "Routine noise handled; important items remain visible."],
-  ["Calendar", "green", "✅", "Done", "No conflict needs attention."],
-  ["Follow-ups", "green", "✅", "3 handled", "Low-risk follow-ups matched learned patterns."],
-  ["Client opportunity", "yellow", "⚠️", "Review", "Atlas has a recommendation but wants your judgment."],
-  ["Contract decision", "red", "🔴", "Needs you", "Consequential decision; Atlas stops here."],
-];
-
 export default function Home() {
+  const connectors = providers.map((provider) => {
+    const configured = Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]);
+    return {
+      provider,
+      label: connectorLabel[provider],
+      configured,
+      state: configured ? "connected" : "missing",
+      icon: configured ? "✅" : "❌",
+    };
+  });
+
+  const connected = connectors.filter((item) => item.configured).length;
+  const databaseConfigured = Boolean(process.env.DATABASE_URL);
+
+  const statusRows = [
+    ["MCP server", "green", "✅", "Online", "The production Atlas MCP endpoint is deployed and reachable."],
+    ["Connectors", connected === providers.length ? "green" : "yellow", connected === providers.length ? "✅" : "⚠️", `${connected}/${providers.length} ready`, "Server-side OAuth/configuration is required before Atlas can act independently on each source."],
+    ["Durable memory", databaseConfigured ? "green" : "yellow", databaseConfigured ? "✅" : "⚠️", databaseConfigured ? "Ready" : "Configure", "Corrections and durable user state require a production database connection."],
+    ["Trust engine", "green", "✅", "Ready", "Every external action is routed through Handled, Review, or Needs you."],
+  ];
+
   return (
     <main>
       <section className="hero">
         <span className="eyebrow">ATLAS V2 · CHATGPT-NATIVE</span>
         <h1>ChatGPT, but deeply yours.</h1>
         <p className="lede">
-          Atlas learns your language, relationships, judgment, routines, and history, then gives ChatGPT the context and safe actions to handle the noise like you would.
+          Atlas is the personal context, relationship memory, and trust layer that turns ChatGPT into a chief of staff that learns how you operate.
         </p>
         <div className="actions">
-          <button>Enable Atlas</button>
+          <a className="primaryAction" href="/setup">Enable Atlas</a>
           <a href="#how">How it works</a>
         </div>
       </section>
@@ -41,21 +56,21 @@ export default function Home() {
         <div>
           <span className="label">North star</span>
           <h2>Signal over noise.</h2>
-          <p>ChatGPT stays the conversation. Atlas stays underneath, learning and handling.</p>
+          <p>ChatGPT stays the conversation. Atlas stays underneath, learning, remembering, and gating actions.</p>
         </div>
         <div className="signal">
-          <strong>2 things need you.</strong>
-          <span>Everything else is handled or waiting safely.</span>
+          <strong>{connected}/{providers.length} sources ready.</strong>
+          <span>{databaseConfigured ? "Durable memory is configured." : "Persistence still needs production configuration."}</span>
         </div>
       </section>
 
       <section className="section">
-        <span className="label">Connection check</span>
+        <span className="label">Live connection check</span>
         <div className="connectorGrid">
-          {connectors.map(([connector, state, icon]) => (
-            <div className={`connector ${state}`} key={connector}>
-              <span className="statusIcon">{icon}</span>
-              <span>{connector}</span>
+          {connectors.map((connector) => (
+            <div className={`connector ${connector.state}`} key={connector.provider}>
+              <span className="statusIcon">{connector.icon}</span>
+              <span>{connector.label}</span>
             </div>
           ))}
         </div>
@@ -64,10 +79,10 @@ export default function Home() {
       <section className="section statusSection">
         <div className="sectionHeader">
           <div>
-            <span className="label">Chief of staff view</span>
+            <span className="label">Production readiness</span>
             <h2>Quiet by default.</h2>
           </div>
-          <span className="microcopy">Details only when you ask.</span>
+          <span className="microcopy">No simulated activity.</span>
         </div>
         <div className="statusTable">
           {statusRows.map(([area, level, icon, result, why]) => (
@@ -102,7 +117,7 @@ export default function Home() {
           <h2>Digital Twin + Relationship Graph + Durable Brain</h2>
         </div>
         <p>
-          Atlas retrieves your own history first, adapts behavior to each relationship, detects stale or missing context, and routes every action through a simple trust state: Handled, Review, or Needs you.
+          Atlas retrieves personal evidence first, adapts behavior by relationship and language, detects stale or missing context, and routes every action through a simple trust state: Handled, Review, or Needs you.
         </p>
       </section>
     </main>
