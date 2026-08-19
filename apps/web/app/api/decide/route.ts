@@ -1,3 +1,5 @@
+import { getVercelOidcToken } from "@vercel/oidc";
+
 const DECISION_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-decide";
 
 export const runtime = "nodejs";
@@ -22,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const token = process.env.VERCEL_OIDC_TOKEN;
+  const token = await getVercelOidcToken();
   if (!token) {
     return json({ ok: false, error: "vercel-oidc-unavailable" }, 503);
   }
