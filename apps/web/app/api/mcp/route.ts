@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { z } from "zod";
 
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
@@ -13,7 +14,7 @@ function envEnabled(name: string): boolean {
 }
 
 async function callAtlas(url: string, payload: Record<string, unknown>, label: string) {
-  const token = process.env.VERCEL_OIDC_TOKEN;
+  const token = await getVercelOidcToken();
   if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
   try {
     const response = await fetch(url, {
@@ -98,7 +99,7 @@ const handler = createMcpHandler((server) => {
     return {
       content: [{ type: "text", text: blockers.length ? `Atlas online · ${blockers[0]} needs attention` : "Atlas online ✓" }],
       structuredContent: {
-        status: "online", version: "2.6", interface: "chatgpt-app-mcp",
+        status: "online", version: "2.7", interface: "chatgpt-app-mcp",
         durableMemory: Boolean(durable?.ok), evidenceCount: durable?.evidenceCount ?? 0,
         correctionCount: durable?.correctionCount ?? 0,
         learningMode: durable?.state?.learning_mode ?? "off", shadowMode: durable?.state?.shadow_mode ?? "off",
