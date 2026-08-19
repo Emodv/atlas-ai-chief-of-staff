@@ -4,6 +4,7 @@ import { z } from "zod";
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
 type Provider = (typeof providers)[number];
 const MEMORY_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-memory";
+const DECISION_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-decide";
 
 function envEnabled(name: string): boolean {
   const value = process.env[name]?.trim().toLowerCase();
@@ -24,6 +25,23 @@ async function memory(action: string, payload: Record<string, unknown> = {}) {
     return response.ok ? data : { ok: false, error: data?.error ?? `memory-http-${response.status}` };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "memory-unreachable" };
+  }
+}
+
+async function decide(payload: Record<string, unknown>) {
+  const token = process.env.VERCEL_OIDC_TOKEN;
+  if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
+  try {
+    const response = await fetch(DECISION_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const data = await response.json();
+    return response.ok ? data : { ok: false, error: data?.error ?? `decision-http-${response.status}`, upstreamStatus: response.status, details: data };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "decision-unreachable" };
   }
 }
 
@@ -71,12 +89,12 @@ const handler = createMcpHandler((server) => {
     return {
       content: [{ type: "text", text: blockers.length ? `Atlas online · ${blockers[0]} needs attention` : "Atlas online ✓" }],
       structuredContent: {
-        status: "online", version: "2.4", interface: "chatgpt-app-mcp",
+        status: "online", version: "2.5", interface: "chatgpt-app-mcp",
         durableMemory: Boolean(durable?.ok), evidenceCount: durable?.evidenceCount ?? 0,
         correctionCount: durable?.correctionCount ?? 0,
         learningMode: durable?.state?.learning_mode ?? "off", shadowMode: durable?.state?.shadow_mode ?? "off",
         connectedSources: connected.map((x) => x.provider), expectedSources: providers.length,
-        blockers, trustState: blockers.length ? "Review" : "Handled",
+        decisionEngine: "atlas-decide", blockers, trustState: blockers.length ? "Review" : "Handled",
       },
     };
   });
@@ -169,6 +187,43 @@ const handler = createMcpHandler((server) => {
     const quality = evidence.length >= 2 && stale === 0 ? "strong" : evidence.length ? "mixed" : "weak";
     const durable = await memory("status");
     return { content: [{ type: "text", text: quality === "strong" ? "Context ready ✓" : "Context needs review" }], structuredContent: { task, person: contact ?? null, relationshipType: relationshipType ?? "unknown", replyLanguage: preferredLanguage ?? "match-contact", evidence, openLoops, evidenceQuality: quality, digitalTwin: durable?.profile?.profile ?? null, preferences: durable?.profile?.preferences ?? null } };
+  });
+
+  server.registerTool("atlas_decide_opportunity", {
+    title: "Atlas Decide Opportunity",
+    description: "Score a meaningful opportunity, choose the execution level, persist it, and place the next action into the Atlas execution queue. Use before advancing revenue, career, money, relationship, commitment, or personal-operations opportunities.",
+    inputSchema: z.object({
+      external_key: z.string().max(240).optional(),
+      person_company: z.string().max(240).optional(),
+      category: z.string().min(1).max(80),
+      relationship_type: z.string().max(80).optional(),
+      opportunity: z.string().max(1000).optional(),
+      risk: z.string().max(1000).optional(),
+      estimated_value: z.number().optional(),
+      value_score: z.number().min(0).max(25),
+      probability_score: z.number().min(0).max(20),
+      speed_score: z.number().min(0).max(15),
+      urgency_score: z.number().min(0).max(15),
+      leverage_score: z.number().min(0).max(15),
+      effort_efficiency_score: z.number().min(0).max(10),
+      confidence: z.number().min(0).max(1),
+      action_risk: z.enum(["low", "medium", "high", "critical"]).default("low"),
+      reversible: z.boolean().default(true),
+      atlas_can_execute: z.boolean().default(false),
+      emod_required: z.boolean().default(false),
+      next_action: z.string().max(1000).optional(),
+      action_type: z.string().max(80).optional(),
+      deadline: z.string().optional(),
+      evidence: z.array(z.unknown()).max(50).default([]),
+    }), annotations: internalWrite,
+  }, async (input) => {
+    const result = await decide(input);
+    if (!result?.ok) {
+      return { content: [{ type: "text", text: "Decision engine unavailable" }], structuredContent: { ...result, trustState: "Needs you" } };
+    }
+    const d = result.decision ?? {};
+    const label = d.decision === "execute" ? "Execute" : d.decision === "ask" ? "Needs you" : d.decision ?? "Queued";
+    return { content: [{ type: "text", text: `${label} · ${d.priority ?? ""} · ${d.score ?? 0}/100` }], structuredContent: { ...result, trustState: d.decision === "execute" ? "Handled" : d.decision === "ask" ? "Needs you" : "Review" } };
   });
 
   server.registerTool("atlas_trust_gate", {
