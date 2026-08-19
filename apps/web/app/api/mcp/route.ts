@@ -11,12 +11,59 @@ type Trust = (typeof TRUST)[keyof typeof TRUST];
 
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
 type Provider = (typeof providers)[number];
+type ModeState = "off" | "learning" | "shadow";
+
+type AtlasRuntime = {
+  mode: ModeState;
+  modeStartedAt: string | null;
+  focus: string[];
+  corrections: Array<{
+    at: string;
+    taskType: string;
+    outcome: "accepted" | "edited" | "rejected" | "different_action";
+    whatAtlasPredicted?: string;
+    whatUserDid?: string;
+    correctionReason?: string;
+    relationshipKey?: string;
+  }>;
+};
+
+const runtimeGlobal = globalThis as typeof globalThis & { __atlasRuntime?: AtlasRuntime };
+
+function runtime(): AtlasRuntime {
+  if (!runtimeGlobal.__atlasRuntime) {
+    runtimeGlobal.__atlasRuntime = {
+      mode: "off",
+      modeStartedAt: null,
+      focus: [],
+      corrections: [],
+    };
+  }
+  return runtimeGlobal.__atlasRuntime;
+}
+
+function envEnabled(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on" || value === "connected" || value === "ready";
+}
 
 function providerConnections() {
   return providers.map((provider) => ({
     provider,
-    configured: Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]),
+    configured: envEnabled(`ATLAS_${provider.toUpperCase()}_CONNECTED`),
   }));
+}
+
+function durableMemoryReady(): boolean {
+  return Boolean(process.env.DATABASE_URL) && envEnabled("ATLAS_DURABLE_MEMORY_READY");
+}
+
+function deploymentBlockers() {
+  const connections = providerConnections();
+  const blockers: string[] = [];
+  if (!connections.some((item) => item.configured)) blockers.push("connect-at-least-one-source");
+  if (!durableMemoryReady()) blockers.push("wire-durable-memory");
+  return blockers;
 }
 
 function chooseTrust(input: {
@@ -31,7 +78,7 @@ function chooseTrust(input: {
       trust: TRUST.red,
       action: "needs_user",
       why: input.sensitive
-        ? "Sensitive/high-consequence context requires the user."
+        ? "Sensitive context requires the user."
         : !input.permissionAvailable
           ? "Required execution permission is not available."
           : "High-consequence action requires the user.",
@@ -72,23 +119,30 @@ const handler = createMcpHandler((server) => {
     "atlas_status",
     {
       title: "Atlas Status",
-      description: "Use this when you need to verify Atlas availability, version, operating mode, and readiness.",
+      description: "Verify Atlas availability, version, operating mode, source readiness, persistence, and the next blocker.",
       inputSchema: z.object({}),
       annotations: readOnly,
     },
     async () => {
       const connections = providerConnections();
+      const state = runtime();
+      const blockers = deploymentBlockers();
       return {
         content: [{ type: "text", text: "Atlas online ✓" }],
         structuredContent: {
           status: "online",
-          version: "2.2",
+          version: "2.3",
           interface: "chatgpt-app-mcp",
           principle: "signal-over-noise",
           defaultUx: "silent-by-default",
-          durableMemory: Boolean(process.env.DATABASE_URL),
+          operatingMode: state.mode,
+          modeStartedAt: state.modeStartedAt,
+          durableMemory: durableMemoryReady(),
+          runtimeStatePersistence: durableMemoryReady() ? "durable-adapter-enabled" : "warm-runtime-only",
           connectedSources: connections.filter((item) => item.configured).length,
           expectedSources: connections.length,
+          blockers,
+          trustState: blockers.length ? "Review" : "Handled",
         },
       };
     },
@@ -98,20 +152,23 @@ const handler = createMcpHandler((server) => {
     "atlas_connection_health",
     {
       title: "Atlas Connection Health",
-      description: "Use this during onboarding or debugging to report every Atlas source connection and the single next blocker.",
+      description: "Report every Atlas source connection and one next blocker, without claiming environment variables are OAuth connections.",
       inputSchema: z.object({}),
       annotations: readOnly,
     },
     async () => {
       const connections = providerConnections();
       const missing = connections.filter((item) => !item.configured);
+      const nextBlocker = missing[0]?.provider ?? (!durableMemoryReady() ? "durable-memory" : null);
       return {
-        content: [{ type: "text", text: missing.length ? `${missing.length} connections need setup` : "Connections ✓" }],
+        content: [{ type: "text", text: nextBlocker ? `Needs setup: ${nextBlocker}` : "Connections ✓" }],
         structuredContent: {
           connections,
-          allReady: missing.length === 0,
-          nextBlocker: missing[0]?.provider ?? null,
-          durableMemory: Boolean(process.env.DATABASE_URL),
+          allSourcesReady: missing.length === 0,
+          allReady: missing.length === 0 && durableMemoryReady(),
+          nextBlocker,
+          durableMemory: durableMemoryReady(),
+          trustState: nextBlocker ? "Needs you" : "Handled",
         },
       };
     },
@@ -121,12 +178,12 @@ const handler = createMcpHandler((server) => {
     "atlas_source_status",
     {
       title: "Atlas Source Status",
-      description: "Use this when ChatGPT needs the status of one Atlas source before attempting any source-specific workflow.",
+      description: "Check one Atlas source before a source-specific workflow.",
       inputSchema: z.object({ provider: z.enum(providers) }),
       annotations: readOnly,
     },
     async ({ provider }: { provider: Provider }) => {
-      const configured = Boolean(process.env[`ATLAS_${provider.toUpperCase()}_CONNECTED`]);
+      const configured = envEnabled(`ATLAS_${provider.toUpperCase()}_CONNECTED`);
       return {
         content: [{ type: "text", text: configured ? `${provider} ✓` : `${provider} needs connection` }],
         structuredContent: {
@@ -143,7 +200,7 @@ const handler = createMcpHandler((server) => {
     "atlas_learning_mode",
     {
       title: "Atlas Learning Mode",
-      description: "Use this after source access exists to start, inspect, or stop Learning Mode. Learning Mode studies tone, language, relationships, routines, preferences, and decision patterns without autonomous external actions.",
+      description: "Start, inspect, or stop Learning Mode. It studies tone, language, relationships, routines, preferences, and decisions without external actions.",
       inputSchema: z.object({
         action: z.enum(["start", "status", "stop"]).default("status"),
         focus: z.array(z.enum(["tone", "language", "relationships", "routines", "preferences", "decisions"])).optional(),
@@ -151,19 +208,42 @@ const handler = createMcpHandler((server) => {
       annotations: internalWrite,
     },
     async ({ action, focus }) => {
-      const connections = providerConnections();
-      const connected = connections.filter((item) => item.configured).map((item) => item.provider);
-      const canStart = connected.length > 0;
-      const mode = action === "stop" ? "off" : canStart ? "learning" : "blocked";
+      const state = runtime();
+      const connected = providerConnections().filter((item) => item.configured).map((item) => item.provider);
+
+      if (action === "start") {
+        if (!connected.length) {
+          return {
+            content: [{ type: "text", text: "Needs source access" }],
+            structuredContent: {
+              requestedAction: action,
+              mode: "blocked",
+              connectedSources: connected,
+              autonomousActionsAllowed: false,
+              trustState: "Needs you",
+              nextBlocker: "connect-source",
+            },
+          };
+        }
+        state.mode = "learning";
+        state.modeStartedAt = new Date().toISOString();
+        state.focus = focus ?? ["tone", "language", "relationships", "routines", "preferences", "decisions"];
+      } else if (action === "stop" && state.mode === "learning") {
+        state.mode = "off";
+        state.modeStartedAt = null;
+      }
+
       return {
-        content: [{ type: "text", text: mode === "learning" ? "Learning Mode ✓" : mode === "off" ? "Learning Mode stopped" : "Needs source access" }],
+        content: [{ type: "text", text: state.mode === "learning" ? "Learning Mode ✓" : "Learning Mode off" }],
         structuredContent: {
           requestedAction: action,
-          mode,
+          mode: state.mode,
+          modeStartedAt: state.modeStartedAt,
           connectedSources: connected,
-          focus: focus ?? ["tone", "language", "relationships", "routines", "preferences", "decisions"],
+          focus: state.focus,
           autonomousActionsAllowed: false,
-          trustState: mode === "learning" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+          statePersistence: durableMemoryReady() ? "durable-adapter-enabled" : "warm-runtime-only",
+          trustState: state.mode === "learning" ? "Handled" : "Review",
         },
       };
     },
@@ -173,7 +253,7 @@ const handler = createMcpHandler((server) => {
     "atlas_shadow_mode",
     {
       title: "Atlas Shadow Mode",
-      description: "Use this after Learning Mode to start, inspect, or stop Shadow Mode. Atlas predicts what the user would do but performs no external actions.",
+      description: "Start, inspect, or stop Shadow Mode. Atlas predicts the user's action but performs no external action.",
       inputSchema: z.object({
         action: z.enum(["start", "status", "stop"]).default("status"),
         taskType: z.string().optional(),
@@ -181,18 +261,40 @@ const handler = createMcpHandler((server) => {
       annotations: internalWrite,
     },
     async ({ action, taskType }) => {
-      const hasMemory = Boolean(process.env.DATABASE_URL);
+      const state = runtime();
       const connected = providerConnections().some((item) => item.configured);
-      const mode = action === "stop" ? "off" : connected ? "shadow" : "blocked";
+
+      if (action === "start") {
+        if (!connected) {
+          return {
+            content: [{ type: "text", text: "Needs source access" }],
+            structuredContent: {
+              requestedAction: action,
+              mode: "blocked",
+              externalActionsAllowed: false,
+              trustState: "Needs you",
+              nextBlocker: "connect-source",
+            },
+          };
+        }
+        state.mode = "shadow";
+        state.modeStartedAt = new Date().toISOString();
+      } else if (action === "stop" && state.mode === "shadow") {
+        state.mode = "off";
+        state.modeStartedAt = null;
+      }
+
       return {
-        content: [{ type: "text", text: mode === "shadow" ? "Shadow Mode ✓" : mode === "off" ? "Shadow Mode stopped" : "Needs source access" }],
+        content: [{ type: "text", text: state.mode === "shadow" ? "Shadow Mode ✓" : "Shadow Mode off" }],
         structuredContent: {
           requestedAction: action,
-          mode,
+          mode: state.mode,
+          modeStartedAt: state.modeStartedAt,
           taskType: taskType ?? null,
           externalActionsAllowed: false,
-          correctionPersistence: hasMemory ? "durable" : "ephemeral",
-          trustState: mode === "shadow" ? "Handled" : mode === "blocked" ? "Needs you" : "Handled",
+          correctionPersistence: durableMemoryReady() ? "durable-adapter-enabled" : "warm-runtime-only",
+          correctionsInRuntime: state.corrections.length,
+          trustState: state.mode === "shadow" ? "Handled" : "Review",
         },
       };
     },
@@ -202,7 +304,7 @@ const handler = createMcpHandler((server) => {
     "atlas_build_context_packet",
     {
       title: "Build Atlas Context",
-      description: "Use this when ChatGPT needs Atlas to turn source evidence into a concise, relationship-aware context packet before replying or deciding what to do.",
+      description: "Turn source evidence into a concise, relationship-aware context packet before ChatGPT replies or decides what to do.",
       inputSchema: z.object({
         task: z.string().min(1),
         contact: z.string().optional(),
@@ -245,7 +347,7 @@ const handler = createMcpHandler((server) => {
     "atlas_trust_gate",
     {
       title: "Atlas Trust Gate",
-      description: "Use this before an external action. Converts action risk and evidence into Handled, Review, or Needs you.",
+      description: "Run before an external action. Converts action risk and evidence into Handled, Review, or Needs you.",
       inputSchema: z.object({
         reversible: z.boolean(),
         consequence: z.enum(["low", "medium", "high"]),
@@ -269,7 +371,7 @@ const handler = createMcpHandler((server) => {
     "atlas_record_correction",
     {
       title: "Record Atlas Correction",
-      description: "Use this when the user approves, edits, rejects, or replaces an Atlas prediction so the Digital Twin can learn the difference.",
+      description: "Record approve/edit/reject/different-action feedback so Shadow Mode can learn within the running service and report whether persistence is durable.",
       inputSchema: z.object({
         taskType: z.string().min(1),
         outcome: z.enum(["accepted", "edited", "rejected", "different_action"]),
@@ -280,14 +382,21 @@ const handler = createMcpHandler((server) => {
       }),
       annotations: internalWrite,
     },
-    async (input) => ({
-      content: [{ type: "text", text: "Learned ✓" }],
-      structuredContent: {
-        recorded: true,
-        ...input,
-        storage: process.env.DATABASE_URL ? "database-configured" : "ephemeral-until-persistence-wiring",
-      },
-    }),
+    async (input) => {
+      const state = runtime();
+      state.corrections.push({ at: new Date().toISOString(), ...input });
+      if (state.corrections.length > 100) state.corrections.splice(0, state.corrections.length - 100);
+      return {
+        content: [{ type: "text", text: "Learned ✓" }],
+        structuredContent: {
+          recorded: true,
+          ...input,
+          correctionCount: state.corrections.length,
+          storage: durableMemoryReady() ? "durable-adapter-enabled" : "warm-runtime-only",
+          trustState: durableMemoryReady() ? "Handled" : "Review",
+        },
+      };
+    },
   );
 });
 
