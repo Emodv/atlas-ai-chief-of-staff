@@ -5,44 +5,40 @@ const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"
 type Provider = (typeof providers)[number];
 const MEMORY_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-memory";
 const DECISION_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-decide";
+const ACTIONS_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-actions";
 
 function envEnabled(name: string): boolean {
   const value = process.env[name]?.trim().toLowerCase();
   return ["1", "true", "yes", "on", "connected", "ready"].includes(value ?? "");
 }
 
-async function memory(action: string, payload: Record<string, unknown> = {}) {
+async function callAtlas(url: string, payload: Record<string, unknown>, label: string) {
   const token = process.env.VERCEL_OIDC_TOKEN;
   if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
   try {
-    const response = await fetch(MEMORY_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action, ...payload }),
-      cache: "no-store",
-    });
-    const data = await response.json();
-    return response.ok ? data : { ok: false, error: data?.error ?? `memory-http-${response.status}` };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "memory-unreachable" };
-  }
-}
-
-async function decide(payload: Record<string, unknown>) {
-  const token = process.env.VERCEL_OIDC_TOKEN;
-  if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
-  try {
-    const response = await fetch(DECISION_URL, {
+    const response = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
       cache: "no-store",
     });
     const data = await response.json();
-    return response.ok ? data : { ok: false, error: data?.error ?? `decision-http-${response.status}`, upstreamStatus: response.status, details: data };
+    return response.ok ? data : { ok: false, error: data?.error ?? `${label}-http-${response.status}`, upstreamStatus: response.status, details: data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "decision-unreachable" };
+    return { ok: false, error: error instanceof Error ? error.message : `${label}-unreachable` };
   }
+}
+
+async function memory(action: string, payload: Record<string, unknown> = {}) {
+  return callAtlas(MEMORY_URL, { action, ...payload }, "memory");
+}
+
+async function decide(payload: Record<string, unknown>) {
+  return callAtlas(DECISION_URL, payload, "decision");
+}
+
+async function actions(action: string, payload: Record<string, unknown> = {}) {
+  return callAtlas(ACTIONS_URL, { action, ...payload }, "actions");
 }
 
 async function connectionState() {
@@ -72,29 +68,43 @@ function chooseTrust(input: {
   return { trust: "GREEN", action: "execute", label: "Handled", why: "Strong evidence, low consequence, reversible, and permitted." };
 }
 
+function inferConnector(action: any): Provider | null {
+  const explicit = action?.payload?.connector;
+  if (providers.includes(explicit)) return explicit;
+  const text = `${action?.action_type ?? ""} ${action?.description ?? ""}`.toLowerCase();
+  if (/email|reply|follow.?up|message|send/.test(text)) return "gmail";
+  if (/calendar|schedule|meeting|book|reschedule/.test(text)) return "calendar";
+  if (/crm|deal|pipeline|contact|company|hubspot/.test(text)) return "hubspot";
+  if (/document|drive|file|proposal/.test(text)) return "drive";
+  if (/notion|note|wiki|sop/.test(text)) return "notion";
+  return null;
+}
+
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const internalWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 
 const handler = createMcpHandler((server) => {
   server.registerTool("atlas_status", {
     title: "Atlas Status",
-    description: "Verify Atlas availability, durable memory, learning/shadow state, evidence volume, sources, and the next blocker.",
+    description: "Verify Atlas availability, durable memory, decision engine, execution queue, learning/shadow state, sources, and the next blocker.",
     inputSchema: z.object({}), annotations: readOnly,
   }, async () => {
-    const { durable, connections } = await connectionState();
+    const [{ durable, connections }, queue] = await Promise.all([connectionState(), actions("status")]);
     const connected = connections.filter((x) => x.configured);
     const blockers = [] as string[];
     if (!durable?.ok) blockers.push("durable-memory");
+    if (!queue?.ok) blockers.push("execution-queue");
     if (!connected.length) blockers.push("connect-source");
     return {
       content: [{ type: "text", text: blockers.length ? `Atlas online · ${blockers[0]} needs attention` : "Atlas online ✓" }],
       structuredContent: {
-        status: "online", version: "2.5", interface: "chatgpt-app-mcp",
+        status: "online", version: "2.6", interface: "chatgpt-app-mcp",
         durableMemory: Boolean(durable?.ok), evidenceCount: durable?.evidenceCount ?? 0,
         correctionCount: durable?.correctionCount ?? 0,
         learningMode: durable?.state?.learning_mode ?? "off", shadowMode: durable?.state?.shadow_mode ?? "off",
         connectedSources: connected.map((x) => x.provider), expectedSources: providers.length,
-        decisionEngine: "atlas-decide", blockers, trustState: blockers.length ? "Review" : "Handled",
+        decisionEngine: "atlas-decide", executionQueue: queue?.ok ? "atlas-actions" : "unavailable",
+        queueCounts: queue?.counts ?? {}, blockers, trustState: blockers.length ? "Review" : "Handled",
       },
     };
   });
@@ -213,17 +223,67 @@ const handler = createMcpHandler((server) => {
       emod_required: z.boolean().default(false),
       next_action: z.string().max(1000).optional(),
       action_type: z.string().max(80).optional(),
+      connector: z.enum(providers).optional(),
       deadline: z.string().optional(),
       evidence: z.array(z.unknown()).max(50).default([]),
     }), annotations: internalWrite,
   }, async (input) => {
     const result = await decide(input);
-    if (!result?.ok) {
-      return { content: [{ type: "text", text: "Decision engine unavailable" }], structuredContent: { ...result, trustState: "Needs you" } };
-    }
+    if (!result?.ok) return { content: [{ type: "text", text: "Decision engine unavailable" }], structuredContent: { ...result, trustState: "Needs you" } };
     const d = result.decision ?? {};
     const label = d.decision === "execute" ? "Execute" : d.decision === "ask" ? "Needs you" : d.decision ?? "Queued";
     return { content: [{ type: "text", text: `${label} · ${d.priority ?? ""} · ${d.score ?? 0}/100` }], structuredContent: { ...result, trustState: d.decision === "execute" ? "Handled" : d.decision === "ask" ? "Needs you" : "Review" } };
+  });
+
+  server.registerTool("atlas_execution_queue", {
+    title: "Atlas Execution Queue",
+    description: "Read execution queue counts without claiming an action.",
+    inputSchema: z.object({}), annotations: readOnly,
+  }, async () => {
+    const result = await actions("status");
+    return { content: [{ type: "text", text: result?.ok ? "Execution queue ready" : "Execution queue unavailable" }], structuredContent: { ...result, trustState: result?.ok ? "Handled" : "Needs you" } };
+  });
+
+  server.registerTool("atlas_next_action", {
+    title: "Claim Next Atlas Action",
+    description: "Atomically claim the next low-risk, reversible, approved autonomous action. After claiming, execute it through the indicated connected source and then call atlas_complete_action or atlas_fail_action. Never claim an action unless you intend to execute it now.",
+    inputSchema: z.object({}), annotations: internalWrite,
+  }, async () => {
+    const result = await actions("next");
+    if (!result?.ok) return { content: [{ type: "text", text: "Execution queue unavailable" }], structuredContent: { ...result, trustState: "Needs you" } };
+    if (!result.claimed) return { content: [{ type: "text", text: "No autonomous action ready" }], structuredContent: { ...result, trustState: "Handled" } };
+    const connector = inferConnector(result.action);
+    return { content: [{ type: "text", text: connector ? `Execute now via ${connector}` : "Execute now via the appropriate connected source" }], structuredContent: { ...result, recommendedConnector: connector, mustRecordOutcome: true, trustState: "Handled" } };
+  });
+
+  server.registerTool("atlas_complete_action", {
+    title: "Complete Atlas Action",
+    description: "Mark a claimed autonomous action completed only after the external connector confirms success. Include the connector receipt or durable identifiers as evidence.",
+    inputSchema: z.object({
+      action_id: z.string().uuid(),
+      connector: z.enum(providers),
+      receipt: z.record(z.string(), z.unknown()).default({}),
+      result: z.record(z.string(), z.unknown()).default({}),
+      note: z.string().max(1000).optional(),
+    }), annotations: internalWrite,
+  }, async (input) => {
+    const result = await actions("complete", input);
+    return { content: [{ type: "text", text: result?.ok ? "Verified action completed ✓" : "Action completion failed" }], structuredContent: { ...result, trustState: result?.ok ? "Handled" : "Needs you" } };
+  });
+
+  server.registerTool("atlas_fail_action", {
+    title: "Fail or Retry Atlas Action",
+    description: "Record a connector execution failure. Use retryable=true only for transient failures where repeating the same action is safe and idempotent.",
+    inputSchema: z.object({
+      action_id: z.string().uuid(),
+      connector: z.enum(providers).optional(),
+      error: z.string().min(1).max(2000),
+      receipt: z.record(z.string(), z.unknown()).default({}),
+      retryable: z.boolean().default(false),
+    }), annotations: internalWrite,
+  }, async (input) => {
+    const result = await actions("fail", input);
+    return { content: [{ type: "text", text: result?.ok ? (input.retryable ? "Action returned to queue" : "Action failure recorded") : "Action failure could not be recorded" }], structuredContent: { ...result, trustState: result?.ok ? "Handled" : "Needs you" } };
   });
 
   server.registerTool("atlas_trust_gate", {
