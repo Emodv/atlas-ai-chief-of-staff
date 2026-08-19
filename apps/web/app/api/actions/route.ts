@@ -1,7 +1,9 @@
+import { getVercelOidcToken } from "@vercel/oidc";
+
 const ACTIONS_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-actions";
 
 async function callActions(payload: Record<string, unknown>) {
-  const token = process.env.VERCEL_OIDC_TOKEN;
+  const token = await getVercelOidcToken();
   if (!token) {
     return new Response(JSON.stringify({ ok: false, error: "vercel-oidc-unavailable" }), {
       status: 503,
