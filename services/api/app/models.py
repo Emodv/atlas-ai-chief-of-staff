@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
@@ -15,6 +16,24 @@ class TrustLevel(str, Enum):
     GREEN = "green"
     YELLOW = "yellow"
     RED = "red"
+
+
+class OpportunityStage(str, Enum):
+    DETECTED = "detected"
+    RANKED = "ranked"
+    ASSIGNED = "assigned"
+    ACTED = "acted"
+    VERIFIED = "verified"
+    CLOSED = "closed"
+    LEARNED = "learned"
+
+
+class PriorityBand(str, Enum):
+    P0 = "P0"
+    P1 = "P1"
+    P2 = "P2"
+    P3 = "P3"
+    P4 = "P4"
 
 
 class Relationship(BaseModel):
@@ -37,6 +56,34 @@ class TwinProfile(BaseModel):
     preferred_languages: list[str] = Field(default_factory=list)
     style_notes: list[str] = Field(default_factory=list)
     decision_rules: list[str] = Field(default_factory=list)
+
+
+class Opportunity(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    category: str
+    owner: str = "atlas"
+    stage: OpportunityStage = OpportunityStage.DETECTED
+    value: float = Field(default=0, ge=0, le=100)
+    probability: float = Field(default=0, ge=0, le=100)
+    speed: float = Field(default=0, ge=0, le=100)
+    urgency: float = Field(default=0, ge=0, le=100)
+    leverage: float = Field(default=0, ge=0, le=100)
+    effort_efficiency: float = Field(default=0, ge=0, le=100)
+    score: int | None = Field(default=None, ge=0, le=100)
+    priority: PriorityBand | None = None
+    requires_human: bool = False
+    executable: bool = False
+    evidence_ids: list[str] = Field(default_factory=list)
+    next_action: str | None = None
+    expected_value: str | None = None
+    deadline: datetime | None = None
+    last_action: str | None = None
+    verification_evidence_ids: list[str] = Field(default_factory=list)
+    learning: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DecisionRequest(BaseModel):

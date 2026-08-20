@@ -64,7 +64,6 @@ create table if not exists events (
 create index if not exists events_user_occurred_idx on events(user_id, occurred_at desc);
 create index if not exists events_metadata_gin_idx on events using gin(metadata);
 
--- Durable, synthesized facts. Raw evidence remains in source events/documents.
 create table if not exists memory_facts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references atlas_users(id) on delete cascade,
@@ -84,7 +83,6 @@ create table if not exists memory_facts (
 create index if not exists memory_facts_user_subject_idx on memory_facts(user_id, subject_key);
 create index if not exists memory_facts_user_confirmed_idx on memory_facts(user_id, last_confirmed_at desc);
 
--- Typed graph edges let Atlas traverse relationships instead of relying only on vector similarity.
 create table if not exists graph_edges (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references atlas_users(id) on delete cascade,
@@ -135,5 +133,69 @@ create table if not exists corrections (
   outcome text not null check (outcome in ('accepted','edited','rejected','different_action')),
   correction_reason text,
   final_payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Persistent Opportunity Graph: Atlas's closed-loop operating memory.
+create table if not exists opportunities (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references atlas_users(id) on delete cascade,
+  external_key text,
+  title text not null,
+  category text not null,
+  owner text not null default 'atlas',
+  stage text not null default 'detected' check (stage in ('detected','ranked','assigned','acted','verified','closed','learned')),
+  value_score numeric(5,2) not null default 0,
+  probability_score numeric(5,2) not null default 0,
+  speed_score numeric(5,2) not null default 0,
+  urgency_score numeric(5,2) not null default 0,
+  leverage_score numeric(5,2) not null default 0,
+  effort_efficiency_score numeric(5,2) not null default 0,
+  master_score integer,
+  priority text check (priority in ('P0','P1','P2','P3','P4')),
+  requires_human boolean not null default false,
+  executable boolean not null default false,
+  expected_value text,
+  next_action text,
+  deadline timestamptz,
+  evidence_event_ids uuid[] not null default '{}',
+  last_action text,
+  verification_evidence_event_ids uuid[] not null default '{}',
+  learning jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  closed_at timestamptz,
+  unique(user_id, external_key)
+);
+
+create index if not exists opportunities_user_priority_idx on opportunities(user_id, priority, master_score desc);
+create index if not exists opportunities_user_stage_idx on opportunities(user_id, stage, updated_at desc);
+
+create table if not exists opportunity_history (
+  id uuid primary key default gen_random_uuid(),
+  opportunity_id uuid not null references opportunities(id) on delete cascade,
+  user_id uuid not null references atlas_users(id) on delete cascade,
+  from_stage text,
+  to_stage text not null,
+  action text,
+  evidence_event_ids uuid[] not null default '{}',
+  outcome jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists opportunity_history_opportunity_idx on opportunity_history(opportunity_id, created_at desc);
+
+create table if not exists attention_outcomes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references atlas_users(id) on delete cascade,
+  opportunity_id uuid references opportunities(id) on delete set null,
+  human_minutes_saved integer not null default 0,
+  revenue_influenced numeric(14,2),
+  money_saved numeric(14,2),
+  opportunity_advanced boolean not null default false,
+  relationship_protected boolean not null default false,
+  autonomous_actions integer not null default 0,
+  human_decisions integer not null default 0,
   created_at timestamptz not null default now()
 );
