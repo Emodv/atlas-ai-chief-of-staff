@@ -1,5 +1,6 @@
 import { getVercelOidcToken } from "@vercel/oidc";
 import { NextResponse } from "next/server";
+import { nativeGmailStatus } from "../../../lib/native-gmail";
 
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
 const MEMORY_URL = "https://lvkrvqpoajzpcqnlvqaj.supabase.co/functions/v1/atlas-memory";
@@ -9,9 +10,7 @@ function envEnabled(name: string): boolean {
   return ["1", "true", "yes", "on", "connected", "ready"].includes(value ?? "");
 }
 
-async function memoryStatus() {
-  const token = await getVercelOidcToken();
-  if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
+async function memoryStatus(token: string) {
   try {
     const response = await fetch(MEMORY_URL, {
       method: "POST",
@@ -27,13 +26,23 @@ async function memoryStatus() {
 }
 
 export async function GET() {
-  const durable = await memoryStatus();
+  const token = await getVercelOidcToken();
+  if (!token) {
+    return NextResponse.json({ status: "degraded", service: "atlas-ai-chief-of-staff", blocker: "vercel-oidc-unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const [durable, nativeGmail] = await Promise.all([memoryStatus(token), nativeGmailStatus(token, false)]);
   const bridged = new Set<string>(durable?.state?.connected_sources ?? []);
-  const connections = providers.map((provider) => ({
-    provider,
-    configured: bridged.has(provider) || envEnabled(`ATLAS_${provider.toUpperCase()}_CONNECTED`),
-    via: bridged.has(provider) ? "chatgpt-bridge" : envEnabled(`ATLAS_${provider.toUpperCase()}_CONNECTED`) ? "atlas-oauth" : null,
-  }));
+  const connections = providers.map((provider) => {
+    const nativeReady = provider === "gmail" && nativeGmail.ready === true;
+    const atlasOauth = envEnabled(`ATLAS_${provider.toUpperCase()}_CONNECTED`);
+    return {
+      provider,
+      configured: nativeReady || bridged.has(provider) || atlasOauth,
+      via: nativeReady ? "native-oauth" : bridged.has(provider) ? "chatgpt-bridge" : atlasOauth ? "atlas-oauth" : null,
+      autonomous_closed_loop: provider === "gmail" ? nativeReady : false,
+    };
+  });
   const connected = connections.filter((item) => item.configured).length;
   const blockers = [
     ...(!durable?.ok ? ["durable-memory"] : []),
@@ -43,7 +52,7 @@ export async function GET() {
   return NextResponse.json({
     status: "ok",
     service: "atlas-ai-chief-of-staff",
-    version: "2.8",
+    version: "2.9",
     interface: "chatgpt-app-mcp",
     mcp: "/api/mcp",
     durableMemoryReady: Boolean(durable?.ok),
@@ -56,6 +65,8 @@ export async function GET() {
     connectedSources: connected,
     expectedSources: providers.length,
     connections,
+    nativeConnectors: { gmail: nativeGmail },
+    autonomousClosedLoopConnectors: connections.filter((item) => item.autonomous_closed_loop).map((item) => item.provider),
     blockers,
     readiness: blockers.length === 0 ? "ready" : "partial",
     memoryError: durable?.ok ? null : durable?.error ?? "unknown",
