@@ -1,4 +1,5 @@
 import { getVercelOidcToken } from "@vercel/oidc";
+import { nativeGmailExecute, nativeGmailStatus, nativeGmailVerify } from "../../../lib/native-gmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,10 +18,7 @@ type VerificationResult =
   | { ok: false; error: string; retryable: boolean; receipt: Record<string, unknown>; result: Record<string, unknown> };
 
 function json(body: unknown, status = 200) {
-  return Response.json(body, {
-    status,
-    headers: { "cache-control": "no-store", "x-robots-tag": "noindex" },
-  });
+  return Response.json(body, { status, headers: { "cache-control": "no-store", "x-robots-tag": "noindex" } });
 }
 
 function authorized(request: Request) {
@@ -43,6 +41,7 @@ async function atlasCall(url: string, token: string, payload: Record<string, unk
 }
 
 function connectorConfig(provider: Provider, kind: "EXECUTOR" | "VERIFIER"): ConnectorConfig | null {
+  if (provider === "gmail") return null;
   const prefix = `ATLAS_${provider.toUpperCase()}_${kind}`;
   const url = process.env[`${prefix}_URL`]?.trim();
   const secret = process.env[`${prefix}_SECRET`]?.trim();
@@ -112,6 +111,18 @@ async function verifyExternal(action: any, provider: Provider, config: Connector
   return { ok: true, receipt: data.receipt, result: { ...(data.result ?? {}), verified: true } };
 }
 
+async function executeProvider(token: string, action: any, provider: Provider, external?: ConnectorConfig): Promise<ExecutionResult> {
+  if (provider === "gmail") return nativeGmailExecute(token, action);
+  if (!external) return { ok: false, error: "executor-not-configured", retryable: false, uncertain: false, receipt: {} };
+  return executeExternal(action, provider, external);
+}
+
+async function verifyProvider(token: string, action: any, provider: Provider, external?: ConnectorConfig): Promise<VerificationResult> {
+  if (provider === "gmail") return nativeGmailVerify(token, action);
+  if (!external) return { ok: false, error: "verifier-not-configured", retryable: false, receipt: {}, result: {} };
+  return verifyExternal(action, provider, external);
+}
+
 async function failVerification(token: string, action: any, provider: Provider, result: Extract<VerificationResult, { ok: false }>) {
   return atlasCall(ACTIONS_URL, token, {
     action: "fail",
@@ -125,41 +136,47 @@ async function failVerification(token: string, action: any, provider: Provider, 
   });
 }
 
-function countOutcome(summary: any, outcome: any, verification = false) {
+function countOutcome(summary: any, outcome: any) {
   const status = outcome?.action?.status;
   if (status === "queued") summary.retried++;
   else if (status === "verification_pending") summary.verification_retried++;
   else if (status === "dead_letter") summary.dead_lettered++;
   else if (status !== "completed") summary.failed++;
-  if (verification && status === "completed") summary.handled++;
 }
 
 export async function GET(request: Request) {
   if (!authorized(request)) {
-    return json(
-      { ok: false, error: process.env.CRON_SECRET ? "unauthorized" : "cron-secret-not-configured" },
-      process.env.CRON_SECRET ? 401 : 503,
-    );
+    return json({ ok: false, error: process.env.CRON_SECRET ? "unauthorized" : "cron-secret-not-configured" }, process.env.CRON_SECRET ? 401 : 503);
   }
 
   const token = await getVercelOidcToken();
   if (!token) return json({ ok: false, error: "vercel-oidc-unavailable" }, 503);
 
   const runId = crypto.randomUUID();
-  const executors = providers.map((p) => connectorConfig(p, "EXECUTOR")).filter(Boolean) as ConnectorConfig[];
-  const verifiers = providers.map((p) => connectorConfig(p, "VERIFIER")).filter(Boolean) as ConnectorConfig[];
-  const executorByProvider = new Map(executors.map((x) => [x.provider, x]));
-  const verifierByProvider = new Map(verifiers.map((x) => [x.provider, x]));
-  const readyExecutors = executors.map((x) => x.provider);
-  const readyVerifiers = verifiers.map((x) => x.provider);
-  const closedLoopConnectors = readyExecutors.filter((p) => verifierByProvider.has(p));
+  const externalExecutors = providers.map((p) => connectorConfig(p, "EXECUTOR")).filter(Boolean) as ConnectorConfig[];
+  const externalVerifiers = providers.map((p) => connectorConfig(p, "VERIFIER")).filter(Boolean) as ConnectorConfig[];
+  const executorByProvider = new Map(externalExecutors.map((x) => [x.provider, x]));
+  const verifierByProvider = new Map(externalVerifiers.map((x) => [x.provider, x]));
+  const gmail = await nativeGmailStatus(token, true);
+
+  const readyExecutors = Array.from(new Set<Provider>([
+    ...externalExecutors.map((x) => x.provider),
+    ...(gmail.ready ? (["gmail"] as Provider[]) : []),
+  ]));
+  const readyVerifiers = Array.from(new Set<Provider>([
+    ...externalVerifiers.map((x) => x.provider),
+    ...(gmail.ready ? (["gmail"] as Provider[]) : []),
+  ]));
+  const readyVerifierSet = new Set(readyVerifiers);
+  const closedLoopConnectors = readyExecutors.filter((p) => readyVerifierSet.has(p));
 
   const summary: any = {
     ok: true,
     run_id: runId,
     started_at: new Date().toISOString(),
-    protocol: "closed-loop-v1",
+    protocol: "closed-loop-v2",
     phases: {},
+    native_connectors: { gmail },
     ready_executors: readyExecutors,
     ready_verifiers: readyVerifiers,
     ready_closed_loop_connectors: closedLoopConnectors,
@@ -178,7 +195,6 @@ export async function GET(request: Request) {
   try { summary.phases.reap = await atlasCall(ACTIONS_URL, token, { action: "reap" }); }
   catch (error) { summary.phases.reap = { ok: false, error: error instanceof Error ? error.message : String(error) }; }
 
-  // Verify existing side effects before allowing new ones. A verification retry never replays the write.
   for (let i = 0; i < 10 && readyVerifiers.length; i++) {
     let claim: any;
     try { claim = await atlasCall(ACTIONS_URL, token, { action: "next_verify", worker_id: runId, connectors: readyVerifiers }); }
@@ -187,10 +203,8 @@ export async function GET(request: Request) {
 
     const action = claim.action;
     const provider = action.connector as Provider;
-    const verifier = verifierByProvider.get(provider);
-    if (!verifier) break;
     try {
-      const checked = await verifyExternal(action, provider, verifier);
+      const checked = await verifyProvider(token, action, provider, verifierByProvider.get(provider));
       if (checked.ok) {
         await atlasCall(ACTIONS_URL, token, {
           action: "verified",
@@ -206,20 +220,14 @@ export async function GET(request: Request) {
         countOutcome(summary, await failVerification(token, action, provider, checked));
       }
     } catch (error) {
-      const failure: Extract<VerificationResult, { ok: false }> = {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-        retryable: true,
-        receipt: {},
-        result: {},
-      };
+      const failure: Extract<VerificationResult, { ok: false }> = { ok: false, error: error instanceof Error ? error.message : String(error), retryable: true, receipt: {}, result: {} };
       try { countOutcome(summary, await failVerification(token, action, provider, failure)); }
       catch { summary.failed++; }
     }
   }
 
   if (!closedLoopConnectors.length) {
-    summary.blocker = "no-provider-has-both-executor-and-verifier";
+    summary.blocker = gmail.blocker ?? "no-provider-has-both-executor-and-verifier";
     summary.finished_at = new Date().toISOString();
     return json(summary);
   }
@@ -232,13 +240,10 @@ export async function GET(request: Request) {
 
     const action = claim.action;
     const provider = action.connector as Provider;
-    const executor = executorByProvider.get(provider);
-    const verifier = verifierByProvider.get(provider);
-    if (!executor || !verifier) break;
     let executionRecorded = false;
 
     try {
-      const executed = await executeExternal(action, provider, executor);
+      const executed = await executeProvider(token, action, provider, executorByProvider.get(provider));
       if (!executed.ok) {
         const outcome = await atlasCall(ACTIONS_URL, token, {
           action: "fail",
@@ -265,7 +270,8 @@ export async function GET(request: Request) {
       executionRecorded = true;
       summary.executed++;
 
-      const checked = await verifyExternal(staged?.action ?? { ...action, execution_receipt: executed.receipt }, provider, verifier);
+      const actionForVerification = staged?.action ?? { ...action, execution_receipt: executed.receipt };
+      const checked = await verifyProvider(token, actionForVerification, provider, verifierByProvider.get(provider));
       if (checked.ok) {
         await atlasCall(ACTIONS_URL, token, {
           action: "verified",
@@ -278,7 +284,7 @@ export async function GET(request: Request) {
         summary.verified++;
         summary.handled++;
       } else {
-        countOutcome(summary, await failVerification(token, staged?.action ?? action, provider, checked));
+        countOutcome(summary, await failVerification(token, actionForVerification, provider, checked));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
