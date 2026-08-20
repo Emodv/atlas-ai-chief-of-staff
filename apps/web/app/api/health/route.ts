@@ -42,7 +42,7 @@ export async function GET() {
   return NextResponse.json({
     status: "ok",
     service: "atlas-ai-chief-of-staff",
-    version: "2.4",
+    version: "2.8",
     interface: "chatgpt-app-mcp",
     mcp: "/api/mcp",
     durableMemoryReady: Boolean(durable?.ok),
@@ -50,6 +50,8 @@ export async function GET() {
     correctionCount: durable?.correctionCount ?? 0,
     learningMode: durable?.state?.learning_mode ?? "unknown",
     shadowMode: durable?.state?.shadow_mode ?? "unknown",
+    trust: durable?.trust ?? null,
+    autonomyAllowed: Boolean(durable?.trust?.autonomyAllowed),
     connectedSources: connected,
     expectedSources: providers.length,
     connections,
