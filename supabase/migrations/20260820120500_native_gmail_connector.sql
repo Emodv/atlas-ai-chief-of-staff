@@ -60,10 +60,11 @@ begin
     stored_secret := vault.create_secret(
       p_secret,
       'atlas:' || p_user_key || ':' || p_provider,
-      'Atlas connector refresh credential'
+      'Atlas connector refresh credential',
+      null
     );
   else
-    perform vault.update_secret(existing_secret, p_secret);
+    perform vault.update_secret(existing_secret, p_secret, null, null, null);
     stored_secret := existing_secret;
   end if;
 
