@@ -70,7 +70,7 @@ function chooseTrust(input: {
 }
 
 function inferConnector(action: any): Provider | null {
-  const explicit = action?.payload?.connector;
+  const explicit = action?.connector ?? action?.payload?.connector;
   if (providers.includes(explicit)) return explicit;
   const text = `${action?.action_type ?? ""} ${action?.description ?? ""}`.toLowerCase();
   if (/email|reply|follow.?up|message|send/.test(text)) return "gmail";
@@ -87,7 +87,7 @@ const internalWrite = { readOnlyHint: false, destructiveHint: false, idempotentH
 const handler = createMcpHandler((server) => {
   server.registerTool("atlas_status", {
     title: "Atlas Status",
-    description: "Verify Atlas availability, durable memory, decision engine, execution queue, learning/shadow state, sources, and the next blocker.",
+    description: "Verify Atlas availability, durable memory, decision engine, execution queue, learning/shadow state, sources, Human Attention Returned, and the next blocker.",
     inputSchema: z.object({}), annotations: readOnly,
   }, async () => {
     const [{ durable, connections }, queue] = await Promise.all([connectionState(), actions("status")]);
@@ -99,13 +99,15 @@ const handler = createMcpHandler((server) => {
     return {
       content: [{ type: "text", text: blockers.length ? `Atlas online · ${blockers[0]} needs attention` : "Atlas online ✓" }],
       structuredContent: {
-        status: "online", version: "2.7", interface: "chatgpt-app-mcp",
+        status: "online", version: "2.8", interface: "chatgpt-app-mcp",
         durableMemory: Boolean(durable?.ok), evidenceCount: durable?.evidenceCount ?? 0,
         correctionCount: durable?.correctionCount ?? 0,
         learningMode: durable?.state?.learning_mode ?? "off", shadowMode: durable?.state?.shadow_mode ?? "off",
         connectedSources: connected.map((x) => x.provider), expectedSources: providers.length,
         decisionEngine: "atlas-decide", executionQueue: queue?.ok ? "atlas-actions" : "unavailable",
-        queueCounts: queue?.counts ?? {}, blockers, trustState: blockers.length ? "Review" : "Handled",
+        queueCounts: queue?.counts ?? {}, humanAttentionReturned: queue?.human_attention_returned ?? null,
+        workerProtocol: queue?.worker_protocol ?? null, autonomyTrust: queue?.trust ?? null,
+        blockers, trustState: blockers.length ? "Review" : "Handled",
       },
     };
   });
@@ -202,7 +204,7 @@ const handler = createMcpHandler((server) => {
 
   server.registerTool("atlas_decide_opportunity", {
     title: "Atlas Decide Opportunity",
-    description: "Score a meaningful opportunity, choose the execution level, persist it, and place the next action into the Atlas execution queue. Use before advancing revenue, career, money, relationship, commitment, or personal-operations opportunities.",
+    description: "Score a meaningful opportunity, persist a structured execution plan when safe, and hand autonomous work to the verified execution queue. Use before advancing revenue, career, money, relationship, commitment, or personal-operations opportunities.",
     inputSchema: z.object({
       external_key: z.string().max(240).optional(),
       person_company: z.string().max(240).optional(),
@@ -227,6 +229,16 @@ const handler = createMcpHandler((server) => {
       connector: z.enum(providers).optional(),
       deadline: z.string().optional(),
       evidence: z.array(z.unknown()).max(50).default([]),
+      estimated_human_minutes: z.number().int().min(0).max(1440).optional(),
+      metrics: z.object({
+        human_minutes_saved: z.number().min(0).max(1440).optional(),
+        revenue_influenced: z.number().optional(),
+        money_saved: z.number().optional(),
+        opportunity_advanced: z.boolean().optional(),
+        relationship_protected: z.boolean().optional(),
+        metric_quality: z.enum(["estimated", "measured", "mixed"]).optional(),
+      }).optional(),
+      action_payload: z.record(z.string(), z.unknown()).optional(),
     }), annotations: internalWrite,
   }, async (input) => {
     const result = await decide(input);
@@ -238,7 +250,7 @@ const handler = createMcpHandler((server) => {
 
   server.registerTool("atlas_execution_queue", {
     title: "Atlas Execution Queue",
-    description: "Read execution queue counts without claiming an action.",
+    description: "Read execution queue counts, verification backlog, trust maturity, and Human Attention Returned without claiming an action.",
     inputSchema: z.object({}), annotations: readOnly,
   }, async () => {
     const result = await actions("status");
@@ -247,44 +259,57 @@ const handler = createMcpHandler((server) => {
 
   server.registerTool("atlas_next_action", {
     title: "Claim Next Atlas Action",
-    description: "Atomically claim the next low-risk, reversible, approved autonomous action. After claiming, execute it through the indicated connected source and then call atlas_complete_action or atlas_fail_action. Never claim an action unless you intend to execute it now.",
+    description: "Atomically claim the next low-risk, reversible, approved action that can be executed through a currently connected ChatGPT source. Execute it now through the indicated source, then perform an authoritative read-after-write verification before calling atlas_complete_action. Never claim an action unless you intend to execute it now.",
     inputSchema: z.object({}), annotations: internalWrite,
   }, async () => {
-    const result = await actions("next");
+    const { connections } = await connectionState();
+    const readyConnectors = connections.filter((x) => x.configured).map((x) => x.provider);
+    const result = await actions("next", { worker_id: "chatgpt-mcp", connectors: readyConnectors });
     if (!result?.ok) return { content: [{ type: "text", text: "Execution queue unavailable" }], structuredContent: { ...result, trustState: "Needs you" } };
-    if (!result.claimed) return { content: [{ type: "text", text: "No autonomous action ready" }], structuredContent: { ...result, trustState: "Handled" } };
+    if (!result.claimed) return { content: [{ type: "text", text: "No autonomous action ready" }], structuredContent: { ...result, readyConnectors, trustState: "Handled" } };
     const connector = inferConnector(result.action);
-    return { content: [{ type: "text", text: connector ? `Execute now via ${connector}` : "Execute now via the appropriate connected source" }], structuredContent: { ...result, recommendedConnector: connector, mustRecordOutcome: true, trustState: "Handled" } };
+    return {
+      content: [{ type: "text", text: connector ? `Execute and verify now via ${connector}` : "Execute and verify now via the indicated connected source" }],
+      structuredContent: { ...result, readyConnectors, recommendedConnector: connector, mustRecordOutcome: true, mustReadAfterWrite: true, trustState: "Handled" },
+    };
   });
 
   server.registerTool("atlas_complete_action", {
     title: "Complete Atlas Action",
-    description: "Mark a claimed autonomous action completed only after the external connector confirms success. Include the connector receipt or durable identifiers as evidence.",
+    description: "Record a connector write and, when verified=true, close the loop only after an independent authoritative read confirms the intended state. receipt must contain durable provider identifiers/evidence from the read-after-write. If verification is not yet available, pass verified=false; Atlas will keep the action in verification_pending and will not repeat the write.",
     inputSchema: z.object({
       action_id: z.string().uuid(),
       connector: z.enum(providers),
       receipt: z.record(z.string(), z.unknown()).default({}),
       result: z.record(z.string(), z.unknown()).default({}),
+      verified: z.boolean().default(false),
       note: z.string().max(1000).optional(),
     }), annotations: internalWrite,
   }, async (input) => {
-    const result = await actions("complete", input);
-    return { content: [{ type: "text", text: result?.ok ? "Verified action completed ✓" : "Action completion failed" }], structuredContent: { ...result, trustState: result?.ok ? "Handled" : "Needs you" } };
+    const result = await actions("complete", { ...input, result: { ...input.result, verified: input.verified } });
+    const closed = result?.closed_loop === true || result?.action?.verification_status === "verified";
+    const pending = result?.verification_required === true || result?.action?.status === "verification_pending";
+    const text = closed ? "Verified action closed ✓" : pending ? "Execution recorded · verification pending" : result?.ok ? "Action outcome recorded" : "Action completion failed";
+    return { content: [{ type: "text", text }], structuredContent: { ...result, readAfterWriteVerified: closed, trustState: closed ? "Handled" : pending ? "Review" : result?.ok ? "Review" : "Needs you" } };
   });
 
   server.registerTool("atlas_fail_action", {
     title: "Fail or Retry Atlas Action",
-    description: "Record a connector execution failure. Use retryable=true only for transient failures where repeating the same action is safe and idempotent.",
+    description: "Record either an execution failure or a verification failure. Use phase=verify after a provider write has already occurred; Atlas will retry verification without replaying the write. Use uncertain_external_outcome=true when a write may have occurred but the provider response was ambiguous.",
     inputSchema: z.object({
       action_id: z.string().uuid(),
       connector: z.enum(providers).optional(),
       error: z.string().min(1).max(2000),
       receipt: z.record(z.string(), z.unknown()).default({}),
       retryable: z.boolean().default(false),
+      phase: z.enum(["execute", "verify"]).default("execute"),
+      uncertain_external_outcome: z.boolean().default(false),
     }), annotations: internalWrite,
   }, async (input) => {
     const result = await actions("fail", input);
-    return { content: [{ type: "text", text: result?.ok ? (input.retryable ? "Action returned to queue" : "Action failure recorded") : "Action failure could not be recorded" }], structuredContent: { ...result, trustState: result?.ok ? "Handled" : "Needs you" } };
+    const verificationPending = result?.action?.status === "verification_pending";
+    const text = result?.ok ? verificationPending ? "Verification queued without replaying write" : input.retryable ? "Action returned to queue" : "Action failure recorded" : "Action failure could not be recorded";
+    return { content: [{ type: "text", text }], structuredContent: { ...result, trustState: result?.ok ? (result?.requires_human ? "Needs you" : "Handled") : "Needs you" } };
   });
 
   server.registerTool("atlas_trust_gate", {
