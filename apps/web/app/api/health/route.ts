@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from "@vercel/oidc";
 import { NextResponse } from "next/server";
 
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
@@ -9,7 +10,7 @@ function envEnabled(name: string): boolean {
 }
 
 async function memoryStatus() {
-  const token = process.env.VERCEL_OIDC_TOKEN;
+  const token = await getVercelOidcToken();
   if (!token) return { ok: false, error: "vercel-oidc-unavailable" };
   try {
     const response = await fetch(MEMORY_URL, {
