@@ -195,8 +195,6 @@ export default {
           evidence: input.evidence ?? [],
           estimated_value: input.estimated_value ?? null,
           ...scores,
-          master_score: score,
-          priority,
           confidence,
           action_risk: riskLevel,
           next_action: input.next_action ?? null,
