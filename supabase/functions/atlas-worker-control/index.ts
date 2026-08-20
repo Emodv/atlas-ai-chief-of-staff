@@ -242,7 +242,7 @@ export default {
       const p = priority(master);
       const nextReview = new Date(now.getTime() + reviewDelayMs(p)).toISOString();
       const stage = original.lifecycle_stage === "detected" ? "ranked" : original.lifecycle_stage ?? "ranked";
-      const patch = { master_score: master, priority: p, next_review_at: nextReview, lifecycle_stage: stage, updated_at: nowIso };
+      const patch = { next_review_at: nextReview, lifecycle_stage: stage, updated_at: nowIso };
       const updated = await db(`atlas_opportunities?id=eq.${encodeURIComponent(original.id)}&user_key=eq.${USER_KEY}`, key, { method: "PATCH", body: JSON.stringify(patch) });
       const row = Array.isArray(updated) && updated.length === 1 ? updated[0] : { ...original, ...patch };
       if (Array.isArray(updated) && updated.length === 1) {
