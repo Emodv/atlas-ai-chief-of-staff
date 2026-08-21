@@ -70,18 +70,17 @@ export async function atlasUserRest(path: string, init: RequestInit = {}) {
   return { ok: response.ok, status: response.status, data, error: response.ok ? null : String(text || response.statusText) };
 }
 
-export async function signUp(email: string, password: string, fullName?: string, inviteCode?: string) {
+export async function signUp(email: string, password: string, fullName?: string) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ email, password, data: { full_name: fullName || undefined, atlas_invite_code: inviteCode || undefined } }),
+    body: JSON.stringify({ email, password, data: { full_name: fullName || undefined } }),
     cache: "no-store",
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const raw = data?.msg ?? data?.message ?? data?.error_description ?? "signup-failed";
-    const error = String(raw).includes("atlas_private_alpha_invite") ? "This private-alpha invitation is missing, invalid, expired, or already used." : raw;
-    return { ok: false, status: r.status, error };
+    return { ok: false, status: r.status, error: raw };
   }
   if (data?.access_token) await setAtlasSession(data);
   return { ok: true, user: data?.user ?? null, session: Boolean(data?.access_token), confirmEmail: !data?.access_token };
