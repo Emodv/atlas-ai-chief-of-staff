@@ -42,5 +42,14 @@ export async function GET(request: Request) {
   auth.searchParams.set("access_type", "offline");
   auth.searchParams.set("prompt", "consent");
 
-  return Response.redirect(auth.toString(), 302);
+  try {
+    const probe = await fetch(auth.toString(), { redirect: "manual", cache: "no-store" });
+    const location = probe.headers.get("location");
+    if (probe.status >= 300 && probe.status < 400 && location) {
+      return Response.redirect(location, 302);
+    }
+    return Response.redirect(`${origin}/google-unavailable`, 302);
+  } catch {
+    return Response.redirect(`${origin}/google-unavailable`, 302);
+  }
 }
