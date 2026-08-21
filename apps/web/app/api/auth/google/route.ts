@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { ATLAS_GOOGLE_READONLY_SCOPE_STRING } from "./scopes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,22 +26,16 @@ export async function GET(request: Request) {
 
   const origin = new URL(request.url).origin;
   const redirectTo = `${origin}/api/auth/google/callback`;
-  const scopes = [
-    "openid",
-    "email",
-    "profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/calendar.readonly",
-  ].join(" ");
 
   const auth = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
   auth.searchParams.set("provider", "google");
   auth.searchParams.set("redirect_to", redirectTo);
   auth.searchParams.set("code_challenge", challenge);
   auth.searchParams.set("code_challenge_method", "s256");
-  auth.searchParams.set("scopes", scopes);
+  auth.searchParams.set("scopes", ATLAS_GOOGLE_READONLY_SCOPE_STRING);
   auth.searchParams.set("access_type", "offline");
   auth.searchParams.set("prompt", "consent");
+  auth.searchParams.set("include_granted_scopes", "true");
 
   try {
     const probe = await fetch(auth.toString(), { redirect: "manual", cache: "no-store" });
