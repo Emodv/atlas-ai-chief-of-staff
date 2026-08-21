@@ -57,6 +57,20 @@ export async function getAtlasSession() {
   return user?.id ? { accessToken, user } : null;
 }
 
+export async function atlasUserRest(path: string, init: RequestInit = {}) {
+  const session = await getAtlasSession();
+  if (!session) return { ok: false, status: 401, data: null, error: "authentication-required" };
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: { ...authHeaders(session.accessToken), prefer: "return=representation", ...(init.headers ?? {}) },
+    cache: "no-store",
+  });
+  const text = await response.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { ok: response.ok, status: response.status, data, error: response.ok ? null : String(text || response.statusText) };
+}
+
 export async function signUp(email: string, password: string, fullName?: string) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, { method: "POST", headers: authHeaders(), body: JSON.stringify({ email, password, data: { full_name: fullName || undefined } }), cache: "no-store" });
   const data = await r.json().catch(() => ({}));
