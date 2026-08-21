@@ -35,13 +35,20 @@ export async function POST(request: Request) {
     communication_style: String(body?.communication_style ?? "concise").slice(0, 120),
   };
 
+  const now = new Date().toISOString();
   const [workspaceUpdate, profileUpsert, runtimeUpsert] = await Promise.all([
-    atlasUserRest(`atlas_workspaces?id=eq.${encodeURIComponent(workspace.id)}`, { method: "PATCH", body: JSON.stringify({ autonomy_level: autonomy, onboarding_completed: true, execution_enabled: false, kill_switch: true, updated_at: new Date().toISOString() }) }),
-    atlasUserRest("atlas_profile?on_conflict=user_key", { method: "POST", headers: { prefer: "return=representation,resolution=merge-duplicates" }, body: JSON.stringify({ user_key: workspace.user_key, profile, preferences: { communication_style: profile.communication_style }, updated_at: new Date().toISOString() }) }),
-    atlasUserRest("atlas_runtime_state?on_conflict=user_key", { method: "POST", headers: { prefer: "return=representation,resolution=merge-duplicates" }, body: JSON.stringify({ user_key: workspace.user_key, learning_mode: "learning", shadow_mode: "shadow", autonomy_enabled: false, connected_sources: [], updated_at: new Date().toISOString() }) }),
+    atlasUserRest(`atlas_workspaces?id=eq.${encodeURIComponent(workspace.id)}`, { method: "PATCH", body: JSON.stringify({ autonomy_level: autonomy, onboarding_completed: true, execution_enabled: false, kill_switch: true, updated_at: now }) }),
+    atlasUserRest("atlas_profile?on_conflict=user_key", { method: "POST", headers: { prefer: "return=representation,resolution=merge-duplicates" }, body: JSON.stringify({ user_key: workspace.user_key, profile, preferences: { communication_style: profile.communication_style }, updated_at: now }) }),
+    atlasUserRest("atlas_runtime_state?on_conflict=user_key", { method: "POST", headers: { prefer: "return=representation,resolution=merge-duplicates" }, body: JSON.stringify({ user_key: workspace.user_key, learning_mode: "learning", shadow_mode: "shadow", autonomy_enabled: false, connected_sources: [], updated_at: now }) }),
   ]);
 
   const failures = [workspaceUpdate, profileUpsert, runtimeUpsert].filter((x) => !x.ok);
   if (failures.length) return Response.json({ ok: false, error: failures.map((x) => x.error).join(" | ") }, { status: 500 });
-  return Response.json({ ok: true, safe_mode: true, execution_enabled: false, next: "/decisions" });
+
+  await atlasUserRest("atlas_alpha_events", {
+    method: "POST",
+    body: JSON.stringify({ user_key: workspace.user_key, event_type: "onboarding_completed", metadata: { autonomy_requested: autonomy, safe_mode: true } }),
+  }).catch(() => null);
+
+  return Response.json({ ok: true, safe_mode: true, execution_enabled: false, first_value_required: true, next: "/decisions" });
 }

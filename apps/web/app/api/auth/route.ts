@@ -21,6 +21,12 @@ export async function POST(request: Request) {
   const email = String(body?.email ?? "").trim().toLowerCase();
   const password = String(body?.password ?? "");
   if (!email || password.length < 10) return Response.json({ ok: false, error: "Use a valid email and a password of at least 10 characters." }, { status: 400 });
-  const result = action === "signup" ? await signUp(email, password, String(body?.full_name ?? "").trim()) : await signIn(email, password);
+  if (action === "signup") {
+    const inviteCode = String(body?.invite_code ?? "").trim();
+    if (!inviteCode) return Response.json({ ok: false, error: "Private-alpha invite code required." }, { status: 403 });
+    const result = await signUp(email, password, String(body?.full_name ?? "").trim(), inviteCode);
+    return Response.json(result, { status: result.ok ? 200 : Number((result as any).status ?? 400), headers: { "cache-control": "no-store" } });
+  }
+  const result = await signIn(email, password);
   return Response.json(result, { status: result.ok ? 200 : Number((result as any).status ?? 400), headers: { "cache-control": "no-store" } });
 }
