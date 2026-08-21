@@ -22,8 +22,35 @@ type Item = {
   } | null;
 };
 
+type QueueStatus = {
+  counts?: Record<string, number>;
+  connector_counts?: Record<string, number>;
+  human_attention_returned?: {
+    human_minutes_saved?: number;
+    revenue_influenced?: number;
+    money_saved?: number;
+    autonomous_actions?: number;
+    human_decisions?: number;
+  };
+  trust?: {
+    score?: number;
+    stage?: string;
+    autonomyAllowed?: boolean;
+  };
+};
+
+function money(value: number | null | undefined) {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(value);
+}
+
+function titleCase(value?: string) {
+  return (value ?? "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function DecisionInbox() {
   const [items, setItems] = useState<Item[]>([]);
+  const [queue, setQueue] = useState<QueueStatus>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +59,15 @@ export default function DecisionInbox() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/approvals", { cache: "no-store" });
-      const data = await r.json();
-      if (!r.ok || !data.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
-      setItems(data.items ?? []);
+      const [approvalsResponse, actionsResponse] = await Promise.all([
+        fetch("/api/approvals", { cache: "no-store" }),
+        fetch("/api/actions", { cache: "no-store" }),
+      ]);
+      const approvals = await approvalsResponse.json();
+      const actions = await actionsResponse.json();
+      if (!approvalsResponse.ok || !approvals.ok) throw new Error(approvals.error ?? `HTTP ${approvalsResponse.status}`);
+      setItems(approvals.items ?? []);
+      if (actionsResponse.ok && actions.ok) setQueue(actions);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -57,6 +89,9 @@ export default function DecisionInbox() {
       const data = await r.json();
       if (!r.ok || !data.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
       setItems((current) => current.filter((x) => x.id !== item.id));
+      const status = await fetch("/api/actions", { cache: "no-store" });
+      const statusData = await status.json();
+      if (status.ok && statusData.ok) setQueue(statusData);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -65,80 +100,142 @@ export default function DecisionInbox() {
   }
 
   const sorted = useMemo(() => [...items].sort((a, b) => Number(b.opportunity?.master_score ?? 0) - Number(a.opportunity?.master_score ?? 0)), [items]);
+  const totalValue = useMemo(() => sorted.reduce((sum, item) => sum + Number(item.opportunity?.estimated_value ?? 0), 0), [sorted]);
+  const counts = queue.counts ?? {};
+  const handled = Number(counts.completed ?? 0);
+  const queued = Number(counts.queued ?? 0) + Number(counts.executing ?? 0) + Number(counts.verification_pending ?? 0) + Number(counts.verifying ?? 0);
+  const attention = queue.human_attention_returned ?? {};
 
   return (
-    <main style={{ maxWidth: 920, margin: "0 auto", padding: "48px 20px 80px" }}>
-      <section style={{ marginBottom: 32 }}>
-        <span className="eyebrow">ATLAS · DECISION COMPRESSION</span>
-        <h1 style={{ marginBottom: 12 }}>Needs you.</h1>
-        <p className="lede" style={{ maxWidth: 680 }}>Only decisions Atlas is not allowed to make alone. Approve once and the action moves into the verified execution loop. Reject once and Atlas learns from it.</p>
-      </section>
-
-      <section className="panel" style={{ marginBottom: 24 }}>
+    <main className="commandDashboard">
+      <header className="commandTopbar">
         <div>
-          <span className="label">Human attention required</span>
-          <h2 style={{ margin: "6px 0 0" }}>{loading ? "…" : sorted.length}</h2>
+          <div className="commandBrand"><span className="commandMark">A</span><span>Atlas</span></div>
+          <span className="commandSub">Executive Action Dashboard</span>
         </div>
-        <div className="signal">
-          <strong>{sorted.length === 0 && !loading ? "Everything handled." : "One decision at a time."}</strong>
-          <span>High-consequence actions never auto-approve.</span>
+        <div className="commandLive"><span className="liveDot" /> Live · {queue.trust?.stage ? titleCase(queue.trust.stage) : "Connected"}</div>
+      </header>
+
+      <section className="commandHero">
+        <div>
+          <span className="eyebrow">DECISION COMPRESSION</span>
+          <h1>{sorted.length ? `${sorted.length} decisions. Everything else can wait.` : "Everything important is handled."}</h1>
+          <p>Atlas compresses your inbox, calendar, CRM, and operating systems into the few actions that actually deserve your attention.</p>
         </div>
+        <button className="refreshButton" onClick={refresh} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
       </section>
 
-      {error && <div style={{ padding: 16, border: "1px solid #c88", borderRadius: 14, marginBottom: 18 }}>⚠️ {error}</div>}
-      {loading && <p>Loading decisions…</p>}
+      <section className="commandMetrics">
+        <article className="metricCard metricPrimary">
+          <span>Needs you</span>
+          <strong>{loading ? "—" : sorted.length}</strong>
+          <small>Human judgment required</small>
+        </article>
+        <article className="metricCard">
+          <span>Opportunity value</span>
+          <strong>{money(totalValue)}</strong>
+          <small>Known value in current queue</small>
+        </article>
+        <article className="metricCard">
+          <span>Atlas working</span>
+          <strong>{queued}</strong>
+          <small>Queued / executing / verifying</small>
+        </article>
+        <article className="metricCard">
+          <span>Handled</span>
+          <strong>{handled}</strong>
+          <small>Verified completed actions</small>
+        </article>
+      </section>
+
+      <section className="attentionStrip">
+        <div><span>Human Attention Returned</span><strong>{Math.round(Number(attention.human_minutes_saved ?? 0))} min</strong></div>
+        <div><span>Autonomous actions</span><strong>{Number(attention.autonomous_actions ?? 0)}</strong></div>
+        <div><span>Revenue influenced</span><strong>{money(Number(attention.revenue_influenced ?? 0))}</strong></div>
+        <div><span>Money saved</span><strong>{money(Number(attention.money_saved ?? 0))}</strong></div>
+        <div><span>Trust</span><strong>{queue.trust?.score ?? "—"}/100</strong></div>
+      </section>
+
+      {error && <div className="commandError">⚠ {error}</div>}
+
+      <section className="commandSectionHeader">
+        <div>
+          <span className="eyebrow">NOW</span>
+          <h2>Needs your decision</h2>
+        </div>
+        <span className="sectionHint">Highest expected value first</span>
+      </section>
 
       {!loading && sorted.length === 0 && (
-        <section className="panel">
-          <div><span className="label">Status</span><h2>Nothing needs you.</h2><p>Atlas can keep monitoring and handling eligible work.</p></div>
+        <section className="commandEmpty">
+          <div className="emptyCheck">✓</div>
+          <div><h2>Nothing needs you.</h2><p>Atlas can keep monitoring and handling eligible work in the background.</p></div>
         </section>
       )}
 
-      <div style={{ display: "grid", gap: 16 }}>
-        {sorted.map((item) => {
+      <div className="decisionStack">
+        {sorted.map((item, index) => {
           const opp = item.opportunity;
           const recipient = item.payload?.recipient;
-          const score = opp?.master_score ?? null;
+          const score = Number(opp?.master_score ?? 0);
           const value = opp?.estimated_value ?? null;
           const blocked = !item.reversible || !["low", "medium"].includes(item.risk_level);
+          const riskClass = item.risk_level === "low" ? "riskLow" : item.risk_level === "medium" ? "riskMedium" : "riskHigh";
           return (
-            <article key={item.id} className="panel" style={{ display: "block" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 14 }}>
-                <div>
-                  <span className="label">{opp?.priority ?? "REVIEW"}{score != null ? ` · ${score}/100` : ""}</span>
-                  <h2 style={{ margin: "6px 0 6px" }}>{opp?.person_company ?? item.description}</h2>
-                  <p style={{ margin: 0 }}>{item.description}</p>
+            <article key={item.id} className={`decisionCard ${index === 0 ? "decisionCardTop" : ""}`}>
+              <div className="decisionScore">
+                <div className="scoreRing" style={{ "--score": `${Math.max(0, Math.min(100, score)) * 3.6}deg` } as React.CSSProperties}>
+                  <span>{score || "—"}</span>
                 </div>
-                <span className="trustPill yellow">{item.risk_level} risk</span>
+                <small>{opp?.priority ?? "REVIEW"}</small>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, margin: "16px 0" }}>
-                {recipient && <div><span className="label">Recipient</span><div>{recipient}</div></div>}
-                {opp?.category && <div><span className="label">Category</span><div>{opp.category}</div></div>}
-                {value != null && <div><span className="label">Estimated value</span><div>${Number(value).toLocaleString()}</div></div>}
-                <div><span className="label">Confidence</span><div>{Math.round(Number(item.confidence ?? 0) * 100)}%</div></div>
-              </div>
+              <div className="decisionBody">
+                <div className="decisionTitleRow">
+                  <div>
+                    <span className="decisionCategory">{titleCase(opp?.category ?? item.action_type)}</span>
+                    <h3>{opp?.person_company ?? item.description}</h3>
+                    <p>{item.description}</p>
+                  </div>
+                  <span className={`riskBadge ${riskClass}`}>{titleCase(item.risk_level)} risk</span>
+                </div>
 
-              {opp?.opportunity && <p><strong>Opportunity:</strong> {opp.opportunity}</p>}
-              {opp?.risk && <p><strong>Risk:</strong> {opp.risk}</p>}
+                <div className="decisionFacts">
+                  {value != null && <div><span>Est. value</span><strong>{money(Number(value))}</strong></div>}
+                  {recipient && <div><span>To</span><strong>{recipient}</strong></div>}
+                  <div><span>Confidence</span><strong>{Math.round(Number(item.confidence ?? 0) * 100)}%</strong></div>
+                  <div><span>Action</span><strong>{titleCase(item.action_type)}</strong></div>
+                </div>
 
-              <div className="actions" style={{ marginTop: 18 }}>
-                <button
-                  className="primaryAction"
-                  disabled={busy === item.id || blocked}
-                  onClick={() => decide("approve", item)}
-                  style={{ border: 0, cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? 0.5 : 1 }}
-                >{busy === item.id ? "Working…" : blocked ? "Direct action required" : "Approve →"}</button>
-                <button
-                  disabled={busy === item.id}
-                  onClick={() => decide("reject", item)}
-                  style={{ border: "1px solid currentColor", background: "transparent", borderRadius: 999, padding: "12px 18px", cursor: "pointer" }}
-                >Reject</button>
+                {(opp?.opportunity || opp?.risk) && (
+                  <div className="decisionContext">
+                    {opp?.opportunity && <div><span>Upside</span><p>{opp.opportunity}</p></div>}
+                    {opp?.risk && <div><span>Watch</span><p>{opp.risk}</p></div>}
+                  </div>
+                )}
+
+                <div className="decisionActions">
+                  <button
+                    className="approveAction"
+                    disabled={busy === item.id || blocked}
+                    onClick={() => decide("approve", item)}
+                  >
+                    {busy === item.id ? "Working…" : blocked ? "Direct action required" : "Approve & queue"}
+                    {!blocked && <span>→</span>}
+                  </button>
+                  <button className="rejectAction" disabled={busy === item.id} onClick={() => decide("reject", item)}>Reject</button>
+                  <span className="actionSafety">{item.reversible ? "Reversible" : "Irreversible"} · {blocked ? "Human execution required" : "Atlas verifies completion"}</span>
+                </div>
               </div>
             </article>
           );
         })}
       </div>
+
+      <footer className="commandFooter">
+        <span>Atlas only interrupts you when judgment is genuinely required.</span>
+        <strong>Revenue → Systems → Assets → Repeat.</strong>
+      </footer>
     </main>
   );
 }
