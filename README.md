@@ -1,124 +1,74 @@
-# Atlas — ChatGPT-native AI Chief of Staff
+# Atlas.Moda — AI Chief of Staff for Google Workspace
 
-Atlas is the personalization, memory, relationship, and execution layer that makes ChatGPT understand how a person actually operates.
+**Live product:** https://atlas.moda  
+**Use cases:** https://atlas.moda/use-cases  
+**Security:** https://atlas.moda/security  
+**Privacy:** https://atlas.moda/privacy
 
-**ChatGPT stays at the center. Atlas makes it personal.**
+Atlas.Moda is a privacy-forward AI chief of staff that helps users surface priorities, preserve relationship context, prepare meetings and follow-ups, and reduce coordination overhead across Google Workspace.
+
+## Public beta
+
+The public onboarding flow starts with Google OAuth and requests read-only access to supported Workspace sources:
+
+- Gmail
+- Google Calendar
+- Google Contacts
+- Google Drive
+- Google Docs
+- Google Sheets
+
+Sensitive and consequential actions are designed to remain gated rather than being executed silently.
+
+## What Atlas.Moda is for
+
+- AI chief of staff: https://atlas.moda/use-cases/ai-chief-of-staff
+- Google Workspace AI assistant: https://atlas.moda/use-cases/google-workspace-ai-assistant
+- Gmail AI assistant: https://atlas.moda/use-cases/gmail-ai-assistant
+- Calendar AI assistant: https://atlas.moda/use-cases/calendar-ai-assistant
+- Executive AI assistant: https://atlas.moda/use-cases/executive-ai-assistant
+- Personal CRM AI: https://atlas.moda/use-cases/personal-crm-ai
+- Follow-up AI assistant: https://atlas.moda/use-cases/follow-up-ai-assistant
+- AI meeting preparation: https://atlas.moda/use-cases/meeting-prep-ai
+- Inbox prioritization AI: https://atlas.moda/use-cases/inbox-prioritization-ai
+- Founder AI assistant: https://atlas.moda/use-cases/founder-ai-assistant
 
 ## Product thesis
 
-**Signal over noise.** A user connects the systems that already contain their life and work history. Atlas studies communication, relationships, decisions, routines, notes, and corrections; builds a Digital Twin + Relationship Graph; then gives ChatGPT the context and safe actions needed to handle routine noise the way that user would.
+**Signal over noise.** Users connect the systems that already contain their work history. Atlas.Moda is designed to learn useful communication, relationship, decision, and routine patterns; build durable context; and help surface the few items that deserve attention.
 
-Atlas does not try to replace ChatGPT. It wraps durable personal context and controlled execution around it.
+The product combines:
 
-## ChatGPT-native MCP bridge
+- **Digital Twin** — evidence-backed preferences and operating patterns.
+- **Relationship Graph** — context about people, companies, meetings, and open loops.
+- **Durable Brain** — persistent context separated from transient session state.
+- **Trust Engine** — routes proposed work through Handled, Review, or Needs you.
+- **Action Layer** — controlled connector-specific actions as permissions and trust mature.
 
-Atlas now exposes a remote MCP surface from the Next.js app at:
+## Safety and tenant isolation
 
-`/api/mcp`
+The public web product uses per-user Supabase authentication and row-level workspace isolation. The older shared `primary` MCP surface is intentionally gated while true per-user MCP OAuth isolation is completed.
 
-Current tools:
+The public `/api/mcp` endpoint therefore does **not** expose the legacy private Digital Twin.
 
-- `atlas_status`
-- `atlas_connection_health`
-- `atlas_build_context_packet`
-- `atlas_trust_gate`
-- `atlas_record_correction`
+## Search and AI discoverability
 
-This removes the manual reasoning/policy gap: ChatGPT can call Atlas directly for context shaping, Green/Yellow/Red trust gating, and correction learning. Atlas-owned OAuth connectors are the next step required to remove the remaining data-access handoff between ChatGPT connectors and the Atlas server.
+Atlas.Moda publishes:
 
-See `docs/CHATGPT_MCP.md`.
-
-## Intended user journey
-
-1. User opens ChatGPT and enables Atlas.
-2. ChatGPT calls `atlas_status` and Atlas checks available connections and permissions.
-3. The user connects Gmail, Calendar, Contacts, Drive, Notion, HubSpot, and other supported tools.
-4. Atlas shows a minimal connection-health checklist: ✅ connected, ⚠️ needs attention, ❌ blocked.
-5. Learning Mode ingests a bounded historical sample and builds:
-   - language + code-switching behavior,
-   - tone, vocabulary, brevity, warmth, formality,
-   - decision and follow-up patterns,
-   - a contact-specific Relationship Graph,
-   - open loops, commitments, rhythms, and boundaries.
-6. Shadow Mode predicts what the user would do and learns from approve/edit/reject corrections.
-7. Safe categories graduate to autonomous handling.
-8. ChatGPT remains the conversational surface; Atlas stays quiet unless something needs the user.
-
-> The GitHub URL is the product source, not executable magic by itself. The production ChatGPT-native path is the Atlas remote MCP integration plus OAuth-backed connectors.
-
-## Trust model — no meaningless percentages in the UI
-
-Atlas may keep numeric confidence internally for evaluation, but users see only three clear states:
-
-- 🟢 **Handled** — Atlas is sure enough, the action is low-risk/reversible, and policy allows execution.
-- 🟡 **Review** — Atlas has a strong recommendation or draft, but the user should look.
-- 🔴 **Needs you** — ambiguity, missing context, sensitive data, or consequential judgment requires the user.
-
-Every row can expose a short **ⓘ Why?** explanation on demand. Default output stays minimal.
-
-## Interaction rule
-
-**One screen. Silent by default. Explain on demand.**
-
-Typical Atlas report:
-
-| Area | Status | Result |
-|---|---|---|
-| Email | ✅ | Done |
-| Calendar | ✅ | Done |
-| Follow-ups | ✅ | 3 handled |
-| Client opportunity | ⚠️ | Review |
-| Contract decision | 🔴 | Needs you |
-
-No paragraph is shown unless the user asks for detail.
-
-## Core architecture
-
-`ChatGPT → Atlas MCP Context/Trust Layer → Atlas-owned connectors`
-
-Atlas contains:
-
-- **Digital Twin** — how this user writes, chooses, prioritizes, negotiates, follows up, and switches language.
-- **Relationship Graph** — how behavior changes by person and relationship.
-- **Durable Brain** — evidence-backed memory across sessions and sources.
-- **Context Engine** — retrieves the minimum relevant context before ChatGPT reasons or Atlas acts.
-- **Trust Engine** — maps internal confidence + consequence + reversibility + permissions to Green/Yellow/Red.
-- **Action Layer** — email, calendar, CRM, files, follow-up, and other connector-specific actions.
-- **Correction Loop** — every edit/rejection becomes training evidence for the twin.
-
-## GBrain-inspired memory principles
-
-Atlas borrows several strong patterns from Garry Tan's GBrain while keeping Atlas focused on a user-specific Digital Twin and chief-of-staff execution:
-
-1. **Brain-first lookup:** consult durable personal context before external search or action.
-2. **Synthesis over raw search:** return the answer/context packet, not a pile of matching documents.
-3. **Typed relationship graph:** connect people, companies, meetings, documents, and commitments through explicit edges.
-4. **Evidence-backed memory:** important claims retain source references.
-5. **Freshness + gap awareness:** Atlas should say what it does *not* know or what may be stale.
-6. **Consolidation:** deduplicate and merge repeated signals instead of letting memory decay into clutter.
-7. **Layer separation:** durable world/relationship knowledge, operational state, and current-session context are distinct stores.
-
-See `docs/GBRAIN_REVIEW.md`.
+- XML sitemap: https://atlas.moda/sitemap.xml
+- robots policy: https://atlas.moda/robots.txt
+- LLM context file: https://atlas.moda/llms.txt
+- structured Schema.org data on public landing pages
+- canonical URLs and social metadata
 
 ## Repository
 
-- `apps/web` — ChatGPT MCP endpoint + optional onboarding/admin + minimal executive-status UI
+- `apps/web` — public Atlas.Moda web application and authenticated user experience
 - `services/api` — Atlas API, twin engine, trust engine, memory/context layer
 - `packages/core` — shared domain types and connector contracts
-- `infra` — Postgres schema + local infrastructure
-- `docs` — product, ChatGPT-native architecture, MCP bridge, GBrain review, roadmap
-
-## First product milestone
-
-A new user can connect Google, Atlas learns from historical communication, and ChatGPT can receive an evidence-backed context packet containing:
-
-- Digital Twin profile,
-- relationship map,
-- preferred language/tone for the current contact,
-- relevant open loops and commitments,
-- freshness/gap warnings,
-- Green / Yellow / Red action recommendation.
+- `supabase` — migrations and protected server functions
+- `docs` — product and architecture documentation
 
 ## Status
 
-**Atlas V2 — active build.** ChatGPT-native MCP endpoint is implemented. Deployment + ChatGPT connection and Atlas-owned OAuth connectors are the next production milestones.
+**Atlas.Moda public beta is live at https://atlas.moda.**
