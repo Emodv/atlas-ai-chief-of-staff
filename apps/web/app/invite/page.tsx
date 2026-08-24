@@ -1,63 +1,48 @@
 export default function InvitePage() {
   return (
-    <main className="inviteShell">
-      <section className="inviteWrap">
-        <header className="inviteHeader">
-          <div className="brandLockup">
-            <div className="atlasGlyph">A</div>
-            <div><div className="atlasName">Atlas</div><div className="atlasSub">AI CHIEF OF STAFF</div></div>
+    <main style={{minHeight:'100vh',background:'radial-gradient(circle at 50% 20%,rgba(110,79,255,.18),transparent 28%),#050710',color:'#fff',fontFamily:'Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',padding:'24px 16px 42px'}}>
+      <section style={{width:'min(760px,100%)',margin:'0 auto'}}>
+        <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,padding:'8px 0 56px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <div style={{width:44,height:44,borderRadius:14,display:'grid',placeItems:'center',fontWeight:900,fontSize:26,background:'linear-gradient(145deg,#a45cff,#665dff)',boxShadow:'0 0 34px rgba(139,78,255,.45)'}}>A</div>
+            <div><div style={{fontWeight:800,fontSize:24}}>Atlas.Moda</div><div style={{fontSize:10,letterSpacing:'.16em',color:'#9298ad',marginTop:5}}>AI CHIEF OF STAFF</div></div>
           </div>
-          <span className="alphaPill">PRIVATE ALPHA</span>
+          <span style={{border:'1px solid rgba(85,217,141,.35)',background:'rgba(85,217,141,.08)',borderRadius:999,padding:'8px 12px',fontSize:11,color:'#9be8ba'}}>PUBLIC BETA</span>
         </header>
 
-        <section className="inviteHero">
-          <h1>You’re invited.<br/><span>Less chaos. More impact.</span></h1>
-          <p>Atlas connects your Google workspace, finds what matters, and gives you back your time.</p>
+        <section style={{textAlign:'center'}}>
+          <div style={{fontSize:12,letterSpacing:'.16em',color:'#9d85d9',marginBottom:14}}>SECURE GOOGLE WORKSPACE CONNECTION</div>
+          <h1 style={{fontSize:'clamp(42px,8vw,72px)',lineHeight:1.02,letterSpacing:'-.05em',margin:'0 0 22px'}}>Less chaos.<br/><span style={{background:'linear-gradient(90deg,#fff 0%,#c66cff 55%,#745cff 100%)',WebkitBackgroundClip:'text',color:'transparent'}}>More impact.</span></h1>
+          <p style={{maxWidth:620,margin:'0 auto 28px',color:'#aeb4c7',fontSize:'clamp(17px,3.8vw,22px)',lineHeight:1.55}}>Atlas.Moda connects your Google workspace, finds what matters, and helps you act with less manual overhead.</p>
 
-          <a className="joinAtlas" href="/api/auth/google">
-            <span className="googleMark">G</span>
+          <a href="/api/auth/google" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,textDecoration:'none',color:'#fff',fontSize:'clamp(19px,4vw,25px)',fontWeight:800,background:'linear-gradient(100deg,#b449ff,#685cff)',borderRadius:22,padding:'20px 26px',boxShadow:'0 14px 50px rgba(109,76,255,.25)'}}>
+            <span style={{width:30,height:30,borderRadius:'50%',display:'grid',placeItems:'center',background:'#fff',color:'#4285f4',fontWeight:900}}>G</span>
             Continue with Google
           </a>
-          <div className="microcopy">Free <b>•</b> Takes 30 seconds <b>•</b> Read-only to start</div>
-          <div className="privacyLine">Gmail · Calendar · Contacts · Drive · Docs · Sheets</div>
+
+          <div style={{marginTop:16,fontSize:13,color:'#969eb1'}}>Read-only Google access to start · Gmail · Calendar · Contacts · Drive · Docs · Sheets</div>
         </section>
 
-        <section className="atlasHub" aria-label="Atlas connects your work">
-          <div className="integration left top"><span className="gmail">M</span></div>
-          <div className="integration left bottom"><span className="calendar">31</span></div>
-          <div className="integration right top"><span className="drive">D</span></div>
-          <div className="integration right bottom"><span className="docs">▤</span></div>
-          <div className="hubCore"><div className="hubBack h1"></div><div className="hubBack h2"></div><div className="hubLogo">A</div></div>
+        <section style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:12,marginTop:42}}>
+          {[
+            ['Read-only first','Atlas requests read-only Google scopes during onboarding.'],
+            ['Workspace isolated','Your connected workspace is kept logically separated from other users.'],
+            ['Sensitive actions gated','High-consequence actions require explicit review instead of silent execution.'],
+          ].map(([title,copy]) => <article key={title} style={{padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'rgba(12,15,29,.92)'}}><strong style={{display:'block',marginBottom:8}}>{title}</strong><span style={{color:'#9ba3b7',fontSize:13,lineHeight:1.5}}>{copy}</span></article>)}
         </section>
 
-        <section className="benefitRow">
-          <div><span>✉</span><small>Inbox</small></div>
-          <div><span>◎</span><small>What matters</small></div>
-          <div><span>↗</span><small>Next actions</small></div>
-          <div><span>◇</span><small>Always safe</small></div>
+        <section style={{marginTop:22,padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'#0b0f18'}}>
+          <strong>Google data use</strong>
+          <p style={{color:'#9ba3b7',fontSize:13,lineHeight:1.6,marginBottom:0}}>Atlas.Moda uses Google Workspace data only to provide user-facing productivity, context, and assistant features. It does not sell Google user data or use it for advertising. Use of information received from Google Workspace APIs adheres to the Google User Data Policy, including the Limited Use requirements.</p>
         </section>
 
-        <section className="impactCard">
-          <div><strong>2.5+</strong><span>Hours saved<br/>this week</span></div>
-          <div className="divider" />
-          <div><strong>↗</strong><span>Focus on<br/>what moves you forward</span></div>
-        </section>
-
-        <footer>Private alpha · Your workspace stays isolated · Execution starts OFF</footer>
+        <footer style={{display:'flex',justifyContent:'center',gap:18,flexWrap:'wrap',marginTop:28,fontSize:12,color:'#7e8798'}}>
+          <a href="/privacy" style={{color:'#aeb6c5'}}>Privacy</a>
+          <a href="/terms" style={{color:'#aeb6c5'}}>Terms</a>
+          <a href="/security" style={{color:'#aeb6c5'}}>Security</a>
+          <span>Atlas.Moda</span>
+        </footer>
       </section>
-
-      <style>{`
-        *{box-sizing:border-box} body{margin:0;background:#050710;color:#fff}
-        .inviteShell{min-height:100vh;background:radial-gradient(circle at 50% 44%,rgba(109,63,255,.13),transparent 34%),linear-gradient(180deg,#060812 0%,#03050b 100%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:28px 18px 42px}
-        .inviteWrap{width:min(760px,100%);margin:0 auto}
-        .inviteHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:72px}.brandLockup{display:flex;gap:12px;align-items:center}.atlasGlyph{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-weight:900;font-size:28px;background:linear-gradient(145deg,#a45cff,#665dff);box-shadow:0 0 34px rgba(139,78,255,.5)}.atlasName{font-weight:800;font-size:25px;line-height:1}.atlasSub{font-size:11px;letter-spacing:.16em;color:#9298ad;margin-top:7px}.alphaPill{border:1px solid rgba(146,86,255,.45);border-radius:999px;padding:9px 14px;font-size:11px;letter-spacing:.13em;color:#bc85ff}
-        .inviteHero{text-align:center}.inviteHero h1{font-size:clamp(42px,8vw,72px);line-height:1.02;letter-spacing:-.05em;margin:0}.inviteHero h1 span{background:linear-gradient(90deg,#fff 0%,#fff 28%,#bb58ff 55%,#745cff 100%);-webkit-background-clip:text;color:transparent}.inviteHero p{max-width:610px;margin:24px auto 28px;color:#aeb4c7;font-size:clamp(17px,3.8vw,23px);line-height:1.5}
-        .joinAtlas{display:flex;align-items:center;justify-content:center;gap:12px;text-decoration:none;color:#fff;font-size:clamp(20px,4vw,28px);font-weight:800;background:linear-gradient(100deg,#b449ff,#685cff);border-radius:24px;padding:22px 28px;box-shadow:0 14px 50px rgba(109,76,255,.25);transition:.2s transform,.2s box-shadow}.joinAtlas:hover{transform:translateY(-2px);box-shadow:0 18px 60px rgba(109,76,255,.35)}.googleMark{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#4285f4;font-weight:900;font-size:20px}.microcopy{color:#9ba1b5;margin-top:18px;font-size:14px}.microcopy b{color:#8c55ff;margin:0 7px}.privacyLine{font-size:13px;color:#81889c;margin-top:14px}
-        .atlasHub{height:330px;position:relative;margin:56px auto 20px;max-width:620px}.hubCore{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:170px;height:170px}.hubBack,.hubLogo{position:absolute;inset:0;border-radius:34px;border:1px solid rgba(132,79,255,.35);background:linear-gradient(145deg,rgba(35,31,71,.9),rgba(11,13,27,.95))}.hubBack.h1{transform:translate(-20px,18px);opacity:.35}.hubBack.h2{transform:translate(20px,18px);opacity:.35}.hubLogo{display:grid;place-items:center;font-size:76px;font-weight:900;color:#b15cff;box-shadow:inset 0 0 40px rgba(105,70,255,.13),0 0 40px rgba(93,67,255,.13)}.integration{position:absolute;width:70px;height:70px;border-radius:20px;border:1px solid rgba(255,255,255,.06);background:#0b0f1a;display:grid;place-items:center;box-shadow:0 14px 30px rgba(0,0,0,.25)}.integration.left{left:6%}.integration.right{right:6%}.integration.top{top:22%}.integration.bottom{bottom:22%}.integration span{font-weight:900;font-size:24px}.gmail{color:#ff5e61}.calendar{color:#6fa4ff}.drive{color:#56c271}.docs{color:#7ca8ff}
-        .benefitRow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 28px}.benefitRow div{text-align:center}.benefitRow span{width:56px;height:56px;margin:0 auto 10px;border-radius:16px;border:1px solid rgba(255,255,255,.06);background:#0a0d17;display:grid;place-items:center;color:#a05cff;font-size:25px}.benefitRow small{color:#d1d4df;font-size:12px}
-        .impactCard{display:grid;grid-template-columns:1fr 1px 1fr;gap:24px;padding:28px;border:1px solid rgba(255,255,255,.07);border-radius:24px;background:linear-gradient(145deg,rgba(12,15,29,.96),rgba(8,10,20,.96));align-items:center}.impactCard>div:not(.divider){display:flex;align-items:center;gap:18px}.impactCard strong{font-size:42px;color:#8e5cff}.impactCard span{color:#b5bacb;line-height:1.45}.divider{height:70px;background:rgba(255,255,255,.07)}footer{text-align:center;color:#73798b;font-size:12px;margin-top:28px}
-        @media(max-width:560px){.inviteShell{padding:24px 16px 34px}.inviteHeader{margin-bottom:54px}.alphaPill{font-size:9px;padding:7px 10px}.atlasGlyph{width:40px;height:40px;font-size:24px}.atlasName{font-size:22px}.atlasSub{font-size:9px}.inviteHero h1{font-size:44px}.inviteHero p{font-size:17px;margin-top:20px}.joinAtlas{border-radius:20px;padding:19px 22px;font-size:21px}.atlasHub{height:275px;margin-top:38px}.hubCore{width:135px;height:135px}.hubLogo{font-size:60px;border-radius:28px}.integration{width:56px;height:56px;border-radius:16px}.integration.left{left:4%}.integration.right{right:4%}.benefitRow span{width:48px;height:48px}.benefitRow small{font-size:10px}.impactCard{padding:22px 18px;gap:14px}.impactCard strong{font-size:35px}.impactCard span{font-size:12px}}
-      `}</style>
     </main>
   );
 }
