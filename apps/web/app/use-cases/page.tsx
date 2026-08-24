@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { seoPages } from "../../lib/seo-pages";
 
 export const metadata: Metadata = {
-  title: "Atlas.Moda Use Cases | AI Chief of Staff for Google Workspace",
+  title: { absolute: "Atlas.Moda Use Cases | AI Chief of Staff for Google Workspace" },
   description: "Explore Atlas.Moda use cases for Gmail, Calendar, meeting preparation, relationship memory, founder operations, and executive productivity.",
   alternates: { canonical: "https://atlas.moda/use-cases" },
 };
