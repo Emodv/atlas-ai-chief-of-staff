@@ -29,10 +29,10 @@ export default function LoginPage() {
   return (
     <main className="authShell">
       <section className="authCard">
-        <div className="commandBrand"><span className="commandMark">A</span><span>Atlas</span></div>
+        <div className="commandBrand"><span className="commandMark">A</span><span>Atlas.Moda</span></div>
         <span className="eyebrow">AI CHIEF OF STAFF</span>
         <h1>{mode === "signup" ? "Start free." : "Welcome back."}</h1>
-        <p>{mode === "signup" ? "Your workspace starts private, isolated, and in Safe Mode." : "Return to your Atlas Command Center."}</p>
+        <p>{mode === "signup" ? "Your workspace starts private, isolated, and with sensitive actions gated." : "Return to your Atlas.Moda workspace."}</p>
 
         {mode === "signup" && <a className="approveAction" style={{display:"flex",justifyContent:"center",textDecoration:"none",marginBottom:16}} href="/api/auth/google">Continue with Google →</a>}
 
@@ -46,9 +46,10 @@ export default function LoginPage() {
         </form>
 
         <button className="authSwitch" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setMessage(null); }}>
-          {mode === "signup" ? "Already have an account? Sign in" : "New to Atlas? Join free"}
+          {mode === "signup" ? "Already have an account? Sign in" : "New to Atlas.Moda? Join free"}
         </button>
-        <div className="authTrust"><span>Free</span><span>Workspace isolated</span><span>Execution OFF</span><span>Kill switch ON</span></div>
+        <div className="authTrust"><span>Free</span><span>Workspace isolated</span><span>Read-only Google first</span><span>Sensitive actions gated</span></div>
+        <div style={{marginTop:16,fontSize:12,textAlign:"center"}}><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/security">Security</a></div>
       </section>
     </main>
   );
