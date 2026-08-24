@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!page) return {};
   const url = `${baseUrl}/use-cases/${page.slug}`;
   return {
-    title: page.title,
+    title: { absolute: page.title },
     description: page.description,
     alternates: { canonical: url },
     openGraph: { title: page.title, description: page.description, url, siteName: "Atlas.Moda", type: "website" },
