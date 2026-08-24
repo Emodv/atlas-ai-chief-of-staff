@@ -1,7 +1,16 @@
+const useCases = [
+  ["AI Chief of Staff", "/use-cases/ai-chief-of-staff"],
+  ["Gmail AI Assistant", "/use-cases/gmail-ai-assistant"],
+  ["Meeting Prep AI", "/use-cases/meeting-prep-ai"],
+  ["Personal CRM AI", "/use-cases/personal-crm-ai"],
+  ["Founder AI Assistant", "/use-cases/founder-ai-assistant"],
+  ["Google Workspace AI", "/use-cases/google-workspace-ai-assistant"],
+];
+
 export default function InvitePage() {
   return (
     <main style={{minHeight:'100vh',background:'radial-gradient(circle at 50% 20%,rgba(110,79,255,.18),transparent 28%),#050710',color:'#fff',fontFamily:'Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',padding:'24px 16px 42px'}}>
-      <section style={{width:'min(760px,100%)',margin:'0 auto'}}>
+      <section style={{width:'min(800px,100%)',margin:'0 auto'}}>
         <header style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,padding:'8px 0 56px'}}>
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             <div style={{width:44,height:44,borderRadius:14,display:'grid',placeItems:'center',fontWeight:900,fontSize:26,background:'linear-gradient(145deg,#a45cff,#665dff)',boxShadow:'0 0 34px rgba(139,78,255,.45)'}}>A</div>
@@ -11,32 +20,42 @@ export default function InvitePage() {
         </header>
 
         <section style={{textAlign:'center'}}>
-          <div style={{fontSize:12,letterSpacing:'.16em',color:'#9d85d9',marginBottom:14}}>SECURE GOOGLE WORKSPACE CONNECTION</div>
-          <h1 style={{fontSize:'clamp(42px,8vw,72px)',lineHeight:1.02,letterSpacing:'-.05em',margin:'0 0 22px'}}>Less chaos.<br/><span style={{background:'linear-gradient(90deg,#fff 0%,#c66cff 55%,#745cff 100%)',WebkitBackgroundClip:'text',color:'transparent'}}>More impact.</span></h1>
-          <p style={{maxWidth:620,margin:'0 auto 28px',color:'#aeb4c7',fontSize:'clamp(17px,3.8vw,22px)',lineHeight:1.55}}>Atlas.Moda connects your Google workspace, finds what matters, and helps you act with less manual overhead.</p>
+          <div style={{fontSize:12,letterSpacing:'.16em',color:'#9d85d9',marginBottom:14}}>AI CHIEF OF STAFF FOR GOOGLE WORKSPACE</div>
+          <h1 style={{fontSize:'clamp(42px,8vw,72px)',lineHeight:1.02,letterSpacing:'-.05em',margin:'0 0 22px'}}>Less inbox.<br/><span style={{background:'linear-gradient(90deg,#fff 0%,#c66cff 55%,#745cff 100%)',WebkitBackgroundClip:'text',color:'transparent'}}>More judgment.</span></h1>
+          <p style={{maxWidth:650,margin:'0 auto 28px',color:'#aeb4c7',fontSize:'clamp(17px,3.8vw,22px)',lineHeight:1.55}}>Atlas.Moda connects your Google Workspace, surfaces the few things that deserve attention, and keeps consequential actions under your control.</p>
 
           <a href="/api/auth/google" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,textDecoration:'none',color:'#fff',fontSize:'clamp(19px,4vw,25px)',fontWeight:800,background:'linear-gradient(100deg,#b449ff,#685cff)',borderRadius:22,padding:'20px 26px',boxShadow:'0 14px 50px rgba(109,76,255,.25)'}}>
             <span style={{width:30,height:30,borderRadius:'50%',display:'grid',placeItems:'center',background:'#fff',color:'#4285f4',fontWeight:900}}>G</span>
             Continue with Google
           </a>
 
-          <div style={{marginTop:16,fontSize:13,color:'#969eb1'}}>Read-only Google access to start · Gmail · Calendar · Contacts · Drive · Docs · Sheets</div>
+          <div style={{marginTop:16,fontSize:13,color:'#969eb1'}}>Read-only to start · Gmail · Calendar · Contacts · Drive · Docs · Sheets</div>
+          <div style={{marginTop:8,fontSize:12,color:'#747d91'}}>No Google password shared. Revoke access anytime from your Google Account.</div>
         </section>
 
-        <section style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:12,marginTop:42}}>
+        <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:12,marginTop:42}}>
           {[
-            ['Read-only first','Atlas requests read-only Google scopes during onboarding.'],
-            ['Workspace isolated','Your connected workspace is kept logically separated from other users.'],
-            ['Sensitive actions gated','High-consequence actions require explicit review instead of silent execution.'],
+            ['1 · Connect','Authorize only the Google data you choose.'],
+            ['2 · First scan','Atlas surfaces important email and calendar signals.'],
+            ['3 · Stay in control','Sensitive and consequential actions remain gated.'],
           ].map(([title,copy]) => <article key={title} style={{padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'rgba(12,15,29,.92)'}}><strong style={{display:'block',marginBottom:8}}>{title}</strong><span style={{color:'#9ba3b7',fontSize:13,lineHeight:1.5}}>{copy}</span></article>)}
         </section>
 
-        <section style={{marginTop:22,padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'#0b0f18'}}>
-          <strong>Google data use</strong>
+        <section style={{marginTop:42}}>
+          <div style={{fontSize:11,letterSpacing:'.15em',color:'#9d85d9',marginBottom:12}}>BUILT FOR REAL WORK</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:10}}>
+            {useCases.map(([label,href]) => <a key={href} href={href} style={{textDecoration:'none',color:'#dce1ed',padding:'15px 16px',border:'1px solid rgba(255,255,255,.07)',borderRadius:14,background:'#090d17',fontSize:13}}>{label} →</a>)}
+          </div>
+          <div style={{textAlign:'center',marginTop:16}}><a href="/use-cases" style={{color:'#b8a6ef',fontSize:13}}>See all 10 use cases →</a></div>
+        </section>
+
+        <section style={{marginTop:28,padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'#0b0f18'}}>
+          <strong>Privacy-forward by design</strong>
           <p style={{color:'#9ba3b7',fontSize:13,lineHeight:1.6,marginBottom:0}}>Atlas.Moda uses Google Workspace data only to provide user-facing productivity, context, and assistant features. It does not sell Google user data or use it for advertising. Use of information received from Google Workspace APIs adheres to the Google User Data Policy, including the Limited Use requirements.</p>
         </section>
 
         <footer style={{display:'flex',justifyContent:'center',gap:18,flexWrap:'wrap',marginTop:28,fontSize:12,color:'#7e8798'}}>
+          <a href="/use-cases" style={{color:'#aeb6c5'}}>Use cases</a>
           <a href="/privacy" style={{color:'#aeb6c5'}}>Privacy</a>
           <a href="/terms" style={{color:'#aeb6c5'}}>Terms</a>
           <a href="/security" style={{color:'#aeb6c5'}}>Security</a>
