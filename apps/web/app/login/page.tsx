@@ -1,10 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedNext = searchParams.get("next") ?? "";
+  const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : null;
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export default function LoginPage() {
     setBusy(false);
     if (!response.ok || !data.ok) { setError(data.error ?? "Unable to continue"); return; }
     if (data.confirmEmail) { setMessage("Check your email to confirm your account, then sign in."); setMode("signin"); return; }
-    router.push(mode === "signup" ? "/first-scan" : "/decisions"); router.refresh();
+    router.push(safeNext ?? (mode === "signup" ? "/first-scan" : "/decisions")); router.refresh();
   }
 
   return (
@@ -32,7 +35,7 @@ export default function LoginPage() {
         <div className="commandBrand"><span className="commandMark">A</span><span>Atlas.Moda</span></div>
         <span className="eyebrow">AI CHIEF OF STAFF</span>
         <h1>{mode === "signup" ? "Start free." : "Welcome back."}</h1>
-        <p>{mode === "signup" ? "Your workspace starts private, isolated, and with sensitive actions gated." : "Return to your Atlas.Moda workspace."}</p>
+        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Your workspace starts private, isolated, and with sensitive actions gated." : "Return to your Atlas.Moda workspace."}</p>
 
         {mode === "signup" && <a className="approveAction" style={{display:"flex",justifyContent:"center",textDecoration:"none",marginBottom:16}} href="/api/auth/google">Continue with Google →</a>}
 
