@@ -84,7 +84,8 @@ export async function resolveAtlasTenant(token: string): Promise<AtlasTenant | n
   };
 }
 
-export async function verifyAtlasMcpToken(_req: Request, token: string) {
+export async function verifyAtlasMcpToken(_req: Request, token?: string) {
+  if (!token) return undefined;
   const tenant = await resolveAtlasTenant(token);
   if (!tenant) return undefined;
   const payload = decodeJwtPayload(token);
