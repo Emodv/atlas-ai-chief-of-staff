@@ -1,17 +1,20 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedNext = searchParams.get("next") ?? "";
-  const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : null;
+  const [safeNext, setSafeNext] = useState<string | null>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("next") ?? "";
+    if (requested.startsWith("/") && !requested.startsWith("//")) setSafeNext(requested);
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
