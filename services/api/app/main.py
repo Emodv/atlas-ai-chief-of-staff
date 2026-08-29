@@ -1,11 +1,19 @@
 from fastapi import FastAPI
 
 from .decision import choose_autonomy_stage
-from .models import DecisionRequest, DecisionResponse, Opportunity, TwinProfile
+from .economic_graph import enrich_economics, summarize_portfolio
+from .models import (
+    DecisionRequest,
+    DecisionResponse,
+    EconomicOpportunity,
+    EconomicValueEvent,
+    Opportunity,
+    TwinProfile,
+)
 from .opportunity import compress_decisions, rank_opportunity
 from .twin import MessageSample, build_twin_profile
 
-app = FastAPI(title="Atlas V2 API", version="0.2.0")
+app = FastAPI(title="Atlas V2 API", version="0.3.0")
 
 
 @app.get("/health")
@@ -21,6 +29,30 @@ def autonomy_decide(request: DecisionRequest) -> DecisionResponse:
 @app.post("/v1/opportunities/rank", response_model=Opportunity)
 def opportunity_rank(opportunity: Opportunity) -> Opportunity:
     return rank_opportunity(opportunity)
+
+
+@app.post("/v1/economics/opportunity", response_model=EconomicOpportunity)
+def economic_opportunity(opportunity: EconomicOpportunity) -> EconomicOpportunity:
+    return enrich_economics(opportunity)
+
+
+@app.post("/v1/economics/portfolio")
+def economic_portfolio(
+    opportunities: list[EconomicOpportunity],
+    value_events: list[EconomicValueEvent] | None = None,
+) -> dict:
+    summary = summarize_portfolio(opportunities, value_events or [])
+    return {
+        "expected_value": str(summary.expected_value),
+        "realized_value": str(summary.realized_value),
+        "opportunity_count": summary.opportunity_count,
+        "human_minutes": summary.human_minutes,
+        "expected_value_per_human_hour": (
+            str(summary.expected_value_per_human_hour)
+            if summary.expected_value_per_human_hour is not None
+            else None
+        ),
+    }
 
 
 @app.post("/v1/decisions/compress")
