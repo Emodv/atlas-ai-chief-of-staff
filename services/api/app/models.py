@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import Enum
 from typing import Literal
 
@@ -34,6 +35,26 @@ class PriorityBand(str, Enum):
     P2 = "P2"
     P3 = "P3"
     P4 = "P4"
+
+
+class EconomicNodeType(str, Enum):
+    PERSON = "person"
+    COMPANY = "company"
+    ASSET = "asset"
+    INCOME_STREAM = "income_stream"
+    OPPORTUNITY = "opportunity"
+    ACTION = "action"
+    OUTCOME = "outcome"
+    RELATIONSHIP = "relationship"
+
+
+class EconomicValueKind(str, Enum):
+    REVENUE = "revenue"
+    SAVINGS = "savings"
+    COST = "cost"
+    COMMISSION = "commission"
+    COMPENSATION = "compensation"
+    ASSET_VALUE = "asset_value"
 
 
 class Relationship(BaseModel):
@@ -84,6 +105,58 @@ class Opportunity(BaseModel):
     learning: dict[str, str | int | float | bool] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EconomicOpportunity(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    category: str
+    income_stream: str
+    currency: str = "CAD"
+    estimated_value: Decimal = Field(default=Decimal("0"), ge=0)
+    close_probability: float = Field(default=0, ge=0, le=1)
+    estimated_human_minutes: int = Field(default=0, ge=0)
+    expected_economic_value: Decimal = Field(default=Decimal("0"), ge=0)
+    attention_efficiency: Decimal | None = None
+    source_asset: str | None = None
+    relationship_id: str | None = None
+    deadline: datetime | None = None
+    next_action: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EconomicValueEvent(BaseModel):
+    id: str
+    user_id: str
+    kind: Literal["revenue", "savings", "cost", "commission", "compensation", "asset_value"]
+    amount: Decimal
+    currency: str = "CAD"
+    opportunity_id: str | None = None
+    income_stream: str | None = None
+    source_asset: str | None = None
+    evidence_id: str | None = None
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EconomicGraphNode(BaseModel):
+    id: str
+    user_id: str
+    node_type: EconomicNodeType
+    label: str
+    external_key: str | None = None
+    attributes: dict[str, str | int | float | bool] = Field(default_factory=dict)
+
+
+class EconomicGraphEdge(BaseModel):
+    id: str
+    user_id: str
+    source_node_id: str
+    target_node_id: str
+    relationship: str
+    weight: float = Field(default=1, ge=0)
+    evidence_ids: list[str] = Field(default_factory=list)
 
 
 class DecisionRequest(BaseModel):
