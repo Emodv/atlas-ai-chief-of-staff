@@ -1,0 +1,8 @@
+[project]
+name = "atlas-worker"
+version = "0.1.0"
+description = "Continuous opportunity worker for Atlas.Moda"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
