@@ -8,7 +8,34 @@ BLOCKED_TASK_FRAGMENTS = {
     "employment_offer",
     "pricing_commitment",
     "wire_transfer",
+    "payment",
+    "purchase",
+    "trade",
+    "investment",
+    "contract",
+    "refund",
+    "guarantee",
     "delete_account",
+}
+
+# Standing owner-approved low-risk actions. These still require permission,
+# fresh context, no sensitive data, low consequence, and reversibility.
+APPROVED_LOW_RISK_ACTIONS = {
+    "relationship_checkin",
+    "lead_checkin",
+    "lead_reactivation",
+    "old_contact_reconnect",
+    "simple_acknowledgement",
+    "basic_capability_reply",
+    "basic_factual_reply",
+    "calendar_coordination",
+    "share_booking_link",
+    "crm_hygiene",
+    "internal_record_update",
+    "lead_segmentation",
+    "lead_scoring",
+    "research",
+    "seo_content_update",
 }
 
 
@@ -24,9 +51,10 @@ def _response(
 def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
     """Choose how far Atlas may go while exposing only human trust buckets.
 
-    Internal confidence remains numeric for evaluation. Users see Green, Yellow,
-    or Red. Risk, missing permissions, stale context, and knowledge gaps can
-    always downgrade the trust bucket regardless of model confidence.
+    Confidence never overrides consequence, sensitivity, permission, stale
+    context, or the explicit blocked-action registry. Approved low-risk actions
+    can execute at a slightly lower confidence threshold because the owner has
+    granted a standing rule for those categories.
     """
 
     normalized_task = request.task_type.lower().replace(" ", "_")
@@ -79,6 +107,18 @@ def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
             TrustLevel.YELLOW,
             "Review",
             "The action is not safely reversible.",
+        )
+
+    if (
+        normalized_task in APPROVED_LOW_RISK_ACTIONS
+        and request.confidence >= 0.75
+        and request.consequence == "low"
+    ):
+        return _response(
+            AutonomyStage.EXECUTE,
+            TrustLevel.GREEN,
+            "Handled",
+            "Standing rule permits this low-risk reversible action and context is sufficient.",
         )
 
     if request.confidence >= 0.85 and request.consequence == "low":
