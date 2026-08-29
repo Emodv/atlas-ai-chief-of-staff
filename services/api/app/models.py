@@ -169,6 +169,10 @@ class DecisionRequest(BaseModel):
     has_required_permission: bool = True
     context_is_stale: bool = False
     context_gap: bool = False
+    standing_rule: bool = False
+    independently_verifiable: bool = False
+    estimated_value: Decimal | None = Field(default=None, ge=0)
+    estimated_human_minutes: int = Field(default=0, ge=0, le=1440)
 
 
 class DecisionResponse(BaseModel):
