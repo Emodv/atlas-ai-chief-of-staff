@@ -1,7 +1,7 @@
 from .models import AutonomyStage, DecisionRequest, DecisionResponse, TrustLevel
 
 
-BLOCKED_TASK_FRAGMENTS = {
+HARD_BLOCKED_TASK_FRAGMENTS = {
     "legal",
     "tax",
     "medical",
@@ -16,11 +16,15 @@ BLOCKED_TASK_FRAGMENTS = {
     "refund",
     "guarantee",
     "delete_account",
+    "security_change",
+    "credential",
+    "password",
 }
 
-# Standing owner-approved low-risk actions. These still require permission,
-# fresh context, no sensitive data, low consequence, and reversibility.
-APPROVED_LOW_RISK_ACTIONS = {
+# Owner-approved autonomous operating territory. These tasks are intended to be
+# handled rather than merely suggested when the request is non-sensitive, the
+# connector is authorized, context is current, and the action can be verified.
+APPROVED_AUTONOMOUS_ACTIONS = {
     "relationship_checkin",
     "lead_checkin",
     "lead_reactivation",
@@ -28,14 +32,41 @@ APPROVED_LOW_RISK_ACTIONS = {
     "simple_acknowledgement",
     "basic_capability_reply",
     "basic_factual_reply",
+    "inbound_lead_reply",
     "calendar_coordination",
+    "meeting_coordination",
     "share_booking_link",
     "crm_hygiene",
     "internal_record_update",
     "lead_segmentation",
     "lead_scoring",
+    "prospect_research",
     "research",
+    "opportunity_scoring",
+    "opportunity_research",
+    "relationship_research",
     "seo_content_update",
+    "content_refresh",
+    "safe_site_optimization",
+    "data_cleanup",
+    "data_deduplication",
+    "document_organization",
+    "meeting_brief",
+    "proposal_draft",
+    "followup_draft",
+}
+
+# Medium-consequence work may be prepared aggressively, but the final external
+# commitment stays with the user unless an explicit standing rule says otherwise.
+REVIEW_REQUIRED_FRAGMENTS = {
+    "discount",
+    "custom_price",
+    "scope_commitment",
+    "public_publish",
+    "mass_outreach",
+    "bulk_send",
+    "vendor_commitment",
+    "offer_acceptance",
 }
 
 
@@ -49,12 +80,12 @@ def _response(
 
 
 def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
-    """Choose how far Atlas may go while exposing only human trust buckets.
+    """Choose the highest safe action level for Atlas.
 
-    Confidence never overrides consequence, sensitivity, permission, stale
-    context, or the explicit blocked-action registry. Approved low-risk actions
-    can execute at a slightly lower confidence threshold because the owner has
-    granted a standing rule for those categories.
+    Atlas is designed to be an operating partner, not a passive recommender.
+    Standing rules intentionally widen the autonomous zone for bounded business
+    and administrative work. Confidence never overrides missing permission,
+    sensitivity, stale/missing context, or hard-blocked consequence classes.
     """
 
     normalized_task = request.task_type.lower().replace(" ", "_")
@@ -76,13 +107,13 @@ def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
         )
 
     if request.consequence == "high" or any(
-        fragment in normalized_task for fragment in BLOCKED_TASK_FRAGMENTS
+        fragment in normalized_task for fragment in HARD_BLOCKED_TASK_FRAGMENTS
     ):
         return _response(
             AutonomyStage.SURFACE,
             TrustLevel.RED,
             "Needs you",
-            "High-consequence category is not eligible for autonomous execution.",
+            "High-consequence category is outside Atlas autonomous authority.",
         )
 
     if request.context_gap:
@@ -98,30 +129,61 @@ def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
             AutonomyStage.RECOMMEND,
             TrustLevel.YELLOW,
             "Review",
-            "The relevant context may be stale, so Atlas will not act autonomously.",
+            "The relevant context may be stale, so Atlas will not act on it yet.",
         )
 
-    if not request.reversible:
+    if any(fragment in normalized_task for fragment in REVIEW_REQUIRED_FRAGMENTS):
         return _response(
             AutonomyStage.RECOMMEND,
             TrustLevel.YELLOW,
             "Review",
-            "The action is not safely reversible.",
+            "Atlas can prepare and pressure-test this work, but the final commitment requires review.",
         )
 
+    if not request.reversible and not request.independently_verifiable:
+        return _response(
+            AutonomyStage.RECOMMEND,
+            TrustLevel.YELLOW,
+            "Review",
+            "The action is neither safely reversible nor independently verifiable.",
+        )
+
+    is_approved = normalized_task in APPROVED_AUTONOMOUS_ACTIONS
+    has_standing_authority = request.standing_rule or is_approved
+
+    # Standing authority is deliberately stronger than generic assistant mode.
+    # Atlas may execute familiar, bounded business work at 0.70 confidence when
+    # the result can be verified and the consequence is low.
     if (
-        normalized_task in APPROVED_LOW_RISK_ACTIONS
-        and request.confidence >= 0.75
+        has_standing_authority
+        and request.confidence >= 0.70
         and request.consequence == "low"
+        and (request.reversible or request.independently_verifiable)
     ):
         return _response(
             AutonomyStage.EXECUTE,
             TrustLevel.GREEN,
             "Handled",
-            "Standing rule permits this low-risk reversible action and context is sufficient.",
+            "Standing authority covers this bounded action; context, permission, and verification controls are sufficient.",
         )
 
-    if request.confidence >= 0.85 and request.consequence == "low":
+    # Medium consequence can execute only under an explicit standing rule and
+    # only when independently verifiable. This enables real chief-of-staff work
+    # without silently crossing into contracts, money, security, or other hard blocks.
+    if (
+        request.standing_rule
+        and request.confidence >= 0.90
+        and request.consequence == "medium"
+        and request.independently_verifiable
+    ):
+        return _response(
+            AutonomyStage.EXECUTE,
+            TrustLevel.GREEN,
+            "Handled",
+            "Explicit standing authority and independent verification justify bounded medium-consequence execution.",
+        )
+
+    if request.confidence >= 0.85 and request.consequence == "low" and request.reversible:
         return _response(
             AutonomyStage.EXECUTE,
             TrustLevel.GREEN,
@@ -135,7 +197,7 @@ def choose_autonomy_stage(request: DecisionRequest) -> DecisionResponse:
             stage,
             TrustLevel.YELLOW,
             "Review",
-            "Atlas has a useful prediction but should not execute it without review.",
+            "Atlas has enough signal to prepare the work, but not enough authority or certainty to execute it.",
         )
 
     return _response(
