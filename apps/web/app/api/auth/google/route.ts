@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 const PKCE_COOKIE = "atlas_google_pkce";
 const STATE_COOKIE = "atlas_google_state";
 const MODE_COOKIE = "atlas_google_auth_mode";
+const RETURN_COOKIE = "atlas_google_return";
 
 function base64url(input: Buffer) {
   return input.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -29,18 +30,16 @@ function cookieOptions(maxAge = 60 * 10) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const workspace = url.searchParams.get("workspace") === "1";
+  const requestedReturn = url.searchParams.get("return");
+  const returnTarget = requestedReturn === "onboarding" ? "onboarding" : requestedReturn === "first-scan" ? "first-scan" : "";
   const origin = url.origin;
   const redirectTo = `${origin}/api/auth/google/callback`;
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
-  // Never send users into the known-broken Supabase Google fallback. Account
-  // creation works independently; Workspace connection can be enabled once the
-  // direct Atlas Google credentials are configured correctly.
   if (!clientId || !clientSecret) {
-    const fallback = new URL(workspace ? "/decisions" : "/login", origin);
-    if (!workspace) fallback.searchParams.set("mode", "signup");
-    fallback.searchParams.set("notice", "google-connect-unavailable");
+    const fallback = new URL("/google-unavailable", origin);
+    fallback.searchParams.set("from", workspace ? "workspace" : "login");
     return Response.redirect(fallback.toString(), 302);
   }
 
@@ -52,6 +51,7 @@ export async function GET(request: Request) {
   jar.set(PKCE_COOKIE, verifier, cookieOptions());
   jar.set(STATE_COOKIE, state, cookieOptions());
   jar.set(MODE_COOKIE, workspace ? "workspace" : "login", cookieOptions());
+  if (returnTarget) jar.set(RETURN_COOKIE, returnTarget, cookieOptions());
 
   const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   auth.searchParams.set("client_id", clientId);
