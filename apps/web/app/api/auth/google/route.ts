@@ -8,7 +8,6 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://lvkrvqpoajzpcqnlvqaj.supabase.co";
 const PKCE_COOKIE = "atlas_google_pkce";
 const STATE_COOKIE = "atlas_google_state";
 const MODE_COOKIE = "atlas_google_auth_mode";
@@ -32,6 +31,19 @@ export async function GET(request: Request) {
   const workspace = url.searchParams.get("workspace") === "1";
   const origin = url.origin;
   const redirectTo = `${origin}/api/auth/google/callback`;
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
+  // Never send users into the known-broken Supabase Google fallback. Account
+  // creation works independently; Workspace connection can be enabled once the
+  // direct Atlas Google credentials are configured correctly.
+  if (!clientId || !clientSecret) {
+    const fallback = new URL(workspace ? "/decisions" : "/login", origin);
+    if (!workspace) fallback.searchParams.set("mode", "signup");
+    fallback.searchParams.set("notice", "google-connect-unavailable");
+    return Response.redirect(fallback.toString(), 302);
+  }
+
   const verifier = base64url(randomBytes(48));
   const challenge = base64url(createHash("sha256").update(verifier).digest());
   const state = base64url(randomBytes(32));
@@ -41,44 +53,16 @@ export async function GET(request: Request) {
   jar.set(STATE_COOKIE, state, cookieOptions());
   jar.set(MODE_COOKIE, workspace ? "workspace" : "login", cookieOptions());
 
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
-  if (clientId && clientSecret) {
-    const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    auth.searchParams.set("client_id", clientId);
-    auth.searchParams.set("redirect_uri", redirectTo);
-    auth.searchParams.set("response_type", "code");
-    auth.searchParams.set("scope", workspace ? ATLAS_GOOGLE_READONLY_SCOPE_STRING : ATLAS_GOOGLE_LOGIN_SCOPE_STRING);
-    auth.searchParams.set("state", state);
-    auth.searchParams.set("code_challenge", challenge);
-    auth.searchParams.set("code_challenge_method", "S256");
-    auth.searchParams.set("include_granted_scopes", "true");
-    auth.searchParams.set("access_type", "offline");
-    auth.searchParams.set("prompt", workspace ? "consent" : "select_account");
-    return Response.redirect(auth.toString(), 302);
-  }
-
-  // Safe fallback for environments that have not yet received the direct Google client.
-  // The production goal is to use GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET so the
-  // user's browser starts the provider flow from atlas.moda rather than Supabase.
-  const auth = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
-  auth.searchParams.set("provider", "google");
-  auth.searchParams.set("redirect_to", redirectTo);
+  const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  auth.searchParams.set("client_id", clientId);
+  auth.searchParams.set("redirect_uri", redirectTo);
+  auth.searchParams.set("response_type", "code");
+  auth.searchParams.set("scope", workspace ? ATLAS_GOOGLE_READONLY_SCOPE_STRING : ATLAS_GOOGLE_LOGIN_SCOPE_STRING);
+  auth.searchParams.set("state", state);
   auth.searchParams.set("code_challenge", challenge);
-  auth.searchParams.set("code_challenge_method", "s256");
-  auth.searchParams.set("scopes", workspace ? ATLAS_GOOGLE_READONLY_SCOPE_STRING : ATLAS_GOOGLE_LOGIN_SCOPE_STRING);
+  auth.searchParams.set("code_challenge_method", "S256");
+  auth.searchParams.set("include_granted_scopes", "true");
   auth.searchParams.set("access_type", "offline");
   auth.searchParams.set("prompt", workspace ? "consent" : "select_account");
-  auth.searchParams.set("include_granted_scopes", "true");
-
-  try {
-    const probe = await fetch(auth.toString(), { redirect: "manual", cache: "no-store" });
-    const location = probe.headers.get("location");
-    if (probe.status >= 300 && probe.status < 400 && location) {
-      return Response.redirect(location, 302);
-    }
-    return Response.redirect(`${origin}/google-unavailable`, 302);
-  } catch {
-    return Response.redirect(`${origin}/google-unavailable`, 302);
-  }
+  return Response.redirect(auth.toString(), 302);
 }
