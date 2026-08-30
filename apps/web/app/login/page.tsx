@@ -31,7 +31,7 @@ export default function LoginPage() {
     setBusy(false);
     if (!response.ok || !data.ok) { setError(data.error ?? "Unable to continue"); return; }
     if (data.confirmEmail) { setMessage("Account created. Check your email to confirm it, then return here and sign in."); setMode("signin"); return; }
-    router.push(safeNext ?? (mode === "signup" ? "/onboarding" : "/decisions"));
+    router.push(safeNext ?? "/onboarding");
     router.refresh();
   }
 
@@ -41,7 +41,7 @@ export default function LoginPage() {
         <div className="commandBrand"><span className="commandMark">A</span><span>Atlas.Moda</span></div>
         <span className="eyebrow">AI CHIEF OF STAFF</span>
         <h1>{mode === "signup" ? "Create your private workspace." : "Welcome back."}</h1>
-        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Start with an Atlas account. Google and other connections come later, after you are inside." : "Return to your Atlas.Moda workspace."}</p>
+        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Start with an Atlas account. Google and other connections come later, after you are inside." : "Sign in and Atlas will route you to the right place automatically."}</p>
 
         <form className="authForm" onSubmit={submit}>
           {mode === "signup" && <label>Name<input name="full_name" autoComplete="name" placeholder="Your name" /></label>}
