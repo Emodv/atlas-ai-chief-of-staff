@@ -39,11 +39,11 @@ export default function FirstScanPage() {
         {state === "connect" && (
           <div className="scanCenter">
             <div className="orb"><span>A</span></div>
-            <span className="eyebrow" style={{marginTop:42}}>STEP 2 · WORKSPACE ACCESS</span>
-            <h1 style={{marginTop:12}}>Connect what Atlas should read.</h1>
-            <p>Your Google sign-in is complete. Add read-only Gmail, Calendar, and Contacts access so Atlas can surface what deserves attention.</p>
-            <a className="continueBtn" style={{width:"min(520px,100%)"}} href="/api/auth/google?workspace=1">Connect Workspace →</a>
-            <div className="safeNote">Read-only · No Drive, Docs, or Sheets requested · Revoke anytime</div>
+            <span className="eyebrow" style={{marginTop:42}}>STEP 2 · CONNECT YOUR WORLD</span>
+            <h1 style={{marginTop:12}}>Connect Google Workspace.</h1>
+            <p>This is what gives Atlas real context. Grant read-only access to Gmail, Calendar, Contacts, Drive, Docs, and Sheets so your Chief of Staff can find signals, relationships, commitments, assets, and opportunities.</p>
+            <a className="continueBtn" style={{width:"min(520px,100%)"}} href="/api/auth/google?workspace=1">Connect Google Workspace →</a>
+            <div className="safeNote">Read-only first · No sending, editing, deleting, or changing files · Revoke anytime</div>
           </div>
         )}
 
@@ -51,8 +51,8 @@ export default function FirstScanPage() {
           <div className="scanCenter">
             <div className="orb"><span>A</span></div>
             <div className="scanLine" />
-            <h1>Understanding your day.</h1>
-            <p>Reading only what you approved. Nothing is sent, changed, or deleted.</p>
+            <h1>Understanding your world.</h1>
+            <p>Reading only what you approved across Gmail, Calendar, Contacts, Drive, Docs, and Sheets. Nothing is sent, changed, or deleted.</p>
           </div>
         )}
 
@@ -60,8 +60,8 @@ export default function FirstScanPage() {
           <>
             <div className="wowHead">
               <span className="eyebrow">FIRST VALUE</span>
-              <h1>{findings.length ? `${findings.length} things deserve your attention.` : "You’re clear right now."}</h1>
-              <p>{filtered ? `Atlas reviewed ${filtered} recent signals and kept the rest out of your way.` : "Atlas is connected and ready to keep watching for what matters."}</p>
+              <h1>{findings.length ? `${findings.length} things deserve your attention.` : "Atlas is connected."}</h1>
+              <p>{filtered ? `Atlas reviewed ${filtered} recent signals and kept the rest out of your way.` : "Your Google Workspace is connected. Atlas can now start learning, scanning, and finding what matters."}</p>
             </div>
             <div className="findingList">
               {findings.map((f, i) => (
@@ -72,16 +72,17 @@ export default function FirstScanPage() {
               ))}
             </div>
             <a className="continueBtn" href="/decisions">Open my Command Center →</a>
-            <div className="safeNote">Safe Mode is ON · Execution is OFF · You stay in control</div>
+            <div className="safeNote">Connected · Read-only first · Atlas learns before expanding autonomy</div>
           </>
         )}
 
         {state === "error" && (
           <div className="scanCenter">
             <div className="orb muted"><span>A</span></div>
-            <h1>One connection left.</h1>
-            <p>{error.includes("google-read-access") ? "Connect read-only Gmail and Calendar access so Atlas can complete your first scan." : "Atlas could not complete the first scan yet."}</p>
-            <a className="continueBtn" href="/api/auth/google?workspace=1">Connect Workspace →</a>
+            <h1>Google Workspace is not connected yet.</h1>
+            <p>{error.includes("google-read-access") ? "Atlas needs your read-only Google Workspace connection before it can do the job you created it for." : "Atlas could not complete the Google Workspace connection yet."}</p>
+            <a className="continueBtn" href="/api/auth/google?workspace=1">Connect Google Workspace →</a>
+            <a style={{marginTop:16,color:'#aeb4c8',fontSize:13}} href="/api/health/google-auth">Connection diagnostics</a>
           </div>
         )}
       </section>
