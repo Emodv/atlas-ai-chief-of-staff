@@ -12,8 +12,10 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("next") ?? "";
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("next") ?? "";
     if (requested.startsWith("/") && !requested.startsWith("//")) setSafeNext(requested);
+    if (params.get("mode") === "signup") setMode("signup");
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -25,11 +27,12 @@ export default function LoginPage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: mode, email: form.get("email"), password: form.get("password"), full_name: form.get("full_name") }),
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     setBusy(false);
     if (!response.ok || !data.ok) { setError(data.error ?? "Unable to continue"); return; }
-    if (data.confirmEmail) { setMessage("Check your email to confirm your account, then sign in."); setMode("signin"); return; }
-    router.push(safeNext ?? (mode === "signup" ? "/first-scan" : "/decisions")); router.refresh();
+    if (data.confirmEmail) { setMessage("Account created. Check your email to confirm it, then return here and sign in."); setMode("signin"); return; }
+    router.push(safeNext ?? (mode === "signup" ? "/onboarding" : "/decisions"));
+    router.refresh();
   }
 
   return (
@@ -37,10 +40,8 @@ export default function LoginPage() {
       <section className="authCard">
         <div className="commandBrand"><span className="commandMark">A</span><span>Atlas.Moda</span></div>
         <span className="eyebrow">AI CHIEF OF STAFF</span>
-        <h1>{mode === "signup" ? "Start free." : "Welcome back."}</h1>
-        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Your workspace starts private, isolated, and with sensitive actions gated." : "Return to your Atlas.Moda workspace."}</p>
-
-        {mode === "signup" && <a className="approveAction" style={{display:"flex",justifyContent:"center",textDecoration:"none",marginBottom:16}} href="/api/auth/google">Continue with Google →</a>}
+        <h1>{mode === "signup" ? "Create your private workspace." : "Welcome back."}</h1>
+        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Start with an Atlas account. Google and other connections come later, after you are inside." : "Return to your Atlas.Moda workspace."}</p>
 
         <form className="authForm" onSubmit={submit}>
           {mode === "signup" && <label>Name<input name="full_name" autoComplete="name" placeholder="Your name" /></label>}
@@ -54,7 +55,7 @@ export default function LoginPage() {
         <button className="authSwitch" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setMessage(null); }}>
           {mode === "signup" ? "Already have an account? Sign in" : "New to Atlas.Moda? Join free"}
         </button>
-        <div className="authTrust"><span>Free</span><span>Workspace isolated</span><span>Read-only Google first</span><span>Sensitive actions gated</span></div>
+        <div className="authTrust"><span>Private workspace</span><span>Google optional</span><span>Sensitive actions gated</span><span>Connections revocable</span></div>
         <div style={{marginTop:16,fontSize:12,textAlign:"center"}}><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/security">Security</a></div>
       </section>
     </main>
