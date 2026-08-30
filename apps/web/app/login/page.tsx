@@ -41,7 +41,13 @@ export default function LoginPage() {
         <div className="commandBrand"><span className="commandMark">A</span><span>Atlas.Moda</span></div>
         <span className="eyebrow">AI CHIEF OF STAFF</span>
         <h1>{mode === "signup" ? "Create your private workspace." : "Welcome back."}</h1>
-        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : mode === "signup" ? "Start with an Atlas account. Google and other connections come later, after you are inside." : "Sign in and Atlas will route you to the right place automatically."}</p>
+        <p>{safeNext?.startsWith("/oauth/consent") ? "Sign in to authorize your private Atlas workspace for ChatGPT." : "Google is the recommended path because it connects the Workspace context Atlas is built to understand."}</p>
+
+        <a className="approveAction" style={{display:"flex",justifyContent:"center",textDecoration:"none",marginBottom:18,background:"#fff",color:"#111"}} href="/api/auth/google?workspace=1&return=onboarding">
+          Continue with Google →
+        </a>
+
+        <div style={{textAlign:"center",fontSize:12,color:"#7f8799",margin:"2px 0 16px"}}>or use email</div>
 
         <form className="authForm" onSubmit={submit}>
           {mode === "signup" && <label>Name<input name="full_name" autoComplete="name" placeholder="Your name" /></label>}
@@ -49,13 +55,13 @@ export default function LoginPage() {
           <label>Password<input required minLength={10} name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} placeholder="10+ characters" /></label>
           {error && <div className="commandError">{error}</div>}
           {message && <div className="authMessage">{message}</div>}
-          <button className="approveAction" disabled={busy}>{busy ? "Working…" : mode === "signup" ? "Create account →" : "Sign in →"}</button>
+          <button className="approveAction" disabled={busy}>{busy ? "Working…" : mode === "signup" ? "Create account with email →" : "Sign in with email →"}</button>
         </form>
 
         <button className="authSwitch" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setMessage(null); }}>
           {mode === "signup" ? "Already have an account? Sign in" : "New to Atlas.Moda? Join free"}
         </button>
-        <div className="authTrust"><span>Private workspace</span><span>Google optional</span><span>Sensitive actions gated</span><span>Connections revocable</span></div>
+        <div className="authTrust"><span>Google read-only onboarding</span><span>Workspace isolated</span><span>Sensitive actions gated</span><span>Connections revocable</span></div>
         <div style={{marginTop:16,fontSize:12,textAlign:"center"}}><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/security">Security</a></div>
       </section>
     </main>
