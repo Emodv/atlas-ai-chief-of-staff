@@ -5,12 +5,19 @@ import { useEffect, useState } from "react";
 type Finding = { source: string; title: string; context: string; score: number; next_action: string };
 
 export default function FirstScanPage() {
-  const [state, setState] = useState<"scanning" | "done" | "error">("scanning");
+  const [state, setState] = useState<"checking" | "connect" | "scanning" | "done" | "error">("checking");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [filtered, setFiltered] = useState(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("workspace") === "required") {
+      setState("connect");
+      return;
+    }
+
+    setState("scanning");
     fetch("/api/first-scan", { method: "POST", cache: "no-store" })
       .then(async (r) => {
         const data = await r.json();
@@ -26,6 +33,20 @@ export default function FirstScanPage() {
     <main className="scanShell">
       <section className="scanCard">
         <div className="scanBrand"><div className="scanLogo">A</div><span>Atlas</span></div>
+
+        {state === "checking" && <div className="scanCenter"><div className="orb"><span>A</span></div></div>}
+
+        {state === "connect" && (
+          <div className="scanCenter">
+            <div className="orb"><span>A</span></div>
+            <span className="eyebrow" style={{marginTop:42}}>STEP 2 · WORKSPACE ACCESS</span>
+            <h1 style={{marginTop:12}}>Connect what Atlas should read.</h1>
+            <p>Your Google sign-in is complete. Add read-only Gmail, Calendar, and Contacts access so Atlas can surface what deserves attention.</p>
+            <a className="continueBtn" style={{width:"min(520px,100%)"}} href="/api/auth/google?workspace=1">Connect Workspace →</a>
+            <div className="safeNote">Read-only · No Drive, Docs, or Sheets requested · Revoke anytime</div>
+          </div>
+        )}
+
         {state === "scanning" && (
           <div className="scanCenter">
             <div className="orb"><span>A</span></div>
@@ -59,8 +80,8 @@ export default function FirstScanPage() {
           <div className="scanCenter">
             <div className="orb muted"><span>A</span></div>
             <h1>One connection left.</h1>
-            <p>{error.includes("google-read-access") ? "Reconnect Google once so Atlas can read Gmail and Calendar in Safe Mode." : "Atlas could not complete the first scan yet."}</p>
-            <a className="continueBtn" href="/api/auth/google">Connect Google →</a>
+            <p>{error.includes("google-read-access") ? "Connect read-only Gmail and Calendar access so Atlas can complete your first scan." : "Atlas could not complete the first scan yet."}</p>
+            <a className="continueBtn" href="/api/auth/google?workspace=1">Connect Workspace →</a>
           </div>
         )}
       </section>
