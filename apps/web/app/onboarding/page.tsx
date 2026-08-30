@@ -14,7 +14,7 @@ export default function OnboardingPage() {
       if (r.status === 401) { router.replace("/login"); return; }
       const data = await r.json();
       if (!r.ok || !data.ok) setError(data.error ?? "Unable to load workspace");
-      else if (data.workspace?.onboarding_completed) router.replace("/decisions");
+      else if (data.workspace?.onboarding_completed) router.replace("/first-scan?workspace=required");
       setLoading(false);
     }).catch((e) => { setError(String(e)); setLoading(false); });
   }, [router]);
@@ -38,7 +38,7 @@ export default function OnboardingPage() {
     const data = await response.json();
     setBusy(false);
     if (!response.ok || !data.ok) { setError(data.error ?? "Unable to save onboarding"); return; }
-    router.push("/decisions"); router.refresh();
+    router.push("/first-scan?workspace=required"); router.refresh();
   }
 
   if (loading) return <main className="authShell"><section className="authCard"><p>Preparing your private Atlas workspace…</p></section></main>;
@@ -49,7 +49,7 @@ export default function OnboardingPage() {
         <div className="commandBrand"><span className="commandMark">A</span><span>Atlas</span></div>
         <span className="eyebrow">LEARNING MODE</span>
         <h1>Teach Atlas what matters.</h1>
-        <p>Five inputs are enough to start. Atlas begins in Safe Mode: it can learn and recommend, but it cannot execute external actions for a new workspace.</p>
+        <p>Five inputs are enough to start. Next, connect Google Workspace so Atlas can actually understand your inbox, calendar, contacts, Drive, Docs, and Sheets.</p>
         <form className="authForm" onSubmit={submit}>
           <label>Your role<input name="role" placeholder="Founder, executive, consultant…" /></label>
           <label>North Star<textarea name="north_star" rows={3} placeholder="What should Atlas optimize for?" /></label>
@@ -58,9 +58,9 @@ export default function OnboardingPage() {
           <label>Communication style<select name="communication_style" defaultValue="concise"><option value="concise">Concise</option><option value="warm">Warm</option><option value="direct">Direct</option><option value="detailed">Detailed</option></select></label>
           <label>Starting autonomy<select name="autonomy_level" defaultValue="suggest"><option value="suggest">Suggest only</option><option value="approval">Prepare & ask approval</option><option value="autonomous">Autonomous later, after trust is earned</option></select></label>
           {error && <div className="commandError">{error}</div>}
-          <button className="approveAction" disabled={busy}>{busy ? "Saving…" : "Start Atlas in Safe Mode →"}</button>
+          <button className="approveAction" disabled={busy}>{busy ? "Saving…" : "Continue to Google Workspace →"}</button>
         </form>
-        <div className="authTrust"><span>Execution disabled initially</span><span>Workspace isolated</span><span>Kill switch ON</span></div>
+        <div className="authTrust"><span>Read-only first</span><span>Workspace isolated</span><span>Connections revocable</span></div>
       </section>
     </main>
   );
