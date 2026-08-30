@@ -9,10 +9,11 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "eyJhbGci
 const PKCE_COOKIE = "atlas_google_pkce";
 const STATE_COOKIE = "atlas_google_state";
 const MODE_COOKIE = "atlas_google_auth_mode";
+const RETURN_COOKIE = "atlas_google_return";
 const PROVIDER_COOKIE = "atlas_google_provider_token";
 
 function clearTransientCookies(jar: Awaited<ReturnType<typeof cookies>>) {
-  for (const name of [PKCE_COOKIE, STATE_COOKIE, MODE_COOKIE]) {
+  for (const name of [PKCE_COOKIE, STATE_COOKIE, MODE_COOKIE, RETURN_COOKIE]) {
     jar.set(name, "", { httpOnly: true, path: "/", maxAge: 0 });
   }
 }
@@ -56,9 +57,6 @@ async function directGoogleSession(requestUrl: URL, code: string, verifier: stri
     return { ok: false as const, error: "google-token" };
   }
 
-  // Convert the Google identity into the same Supabase user/session model Atlas
-  // already uses for RLS and tenant isolation, without routing the browser
-  // through the Supabase hostname.
   const supabaseResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
     method: "POST",
     headers: { apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
@@ -88,34 +86,18 @@ export async function GET(request: Request) {
   const verifier = jar.get(PKCE_COOKIE)?.value;
   const expectedState = jar.get(STATE_COOKIE)?.value;
   const mode = jar.get(MODE_COOKIE)?.value === "workspace" ? "workspace" : "login";
+  const requestedReturn = jar.get(RETURN_COOKIE)?.value;
   if (!verifier) return Response.redirect(`${origin}/invite?error=expired-auth`, 302);
 
   const direct = await directGoogleSession(url, code, verifier, expectedState);
-  if (direct) {
-    if (!direct.ok) return Response.redirect(`${origin}/invite?error=${direct.error}`, 302);
-    await setAtlasSession(direct.session);
-    setProviderToken(jar, direct.providerToken);
-    clearTransientCookies(jar);
-    return Response.redirect(mode === "workspace" ? `${origin}/first-scan` : `${origin}/first-scan?workspace=required`, 302);
-  }
+  if (!direct) return Response.redirect(`${origin}/google-unavailable`, 302);
+  if (!direct.ok) return Response.redirect(`${origin}/invite?error=${direct.error}`, 302);
 
-  // Compatibility path while a deployment does not yet have the direct
-  // GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET pair configured.
-  const tokenResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
-    method: "POST",
-    headers: { apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
-    body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
-    cache: "no-store",
-  });
-
-  const session = await tokenResponse.json().catch(() => ({}));
-  if (!tokenResponse.ok || !session?.access_token) {
-    return Response.redirect(`${origin}/invite?error=google-token`, 302);
-  }
-
-  await setAtlasSession(session);
+  await setAtlasSession(direct.session);
+  setProviderToken(jar, direct.providerToken);
   clearTransientCookies(jar);
-  if (session.provider_token) setProviderToken(jar, session.provider_token);
 
-  return Response.redirect(mode === "workspace" ? `${origin}/first-scan` : `${origin}/first-scan?workspace=required`, 302);
+  if (requestedReturn === "onboarding") return Response.redirect(`${origin}/onboarding`, 302);
+  if (requestedReturn === "first-scan") return Response.redirect(`${origin}/first-scan`, 302);
+  return Response.redirect(mode === "workspace" ? `${origin}/first-scan` : `${origin}/onboarding`, 302);
 }
