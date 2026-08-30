@@ -42,7 +42,8 @@ export async function GET(request: Request) {
   jar.set(MODE_COOKIE, workspace ? "workspace" : "login", cookieOptions());
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-  if (clientId) {
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (clientId && clientSecret) {
     const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     auth.searchParams.set("client_id", clientId);
     auth.searchParams.set("redirect_uri", redirectTo);
@@ -58,7 +59,8 @@ export async function GET(request: Request) {
   }
 
   // Safe fallback for environments that have not yet received the direct Google client.
-  // The production goal is to use GOOGLE_CLIENT_ID so the user begins on atlas.moda.
+  // The production goal is to use GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET so the
+  // user's browser starts the provider flow from atlas.moda rather than Supabase.
   const auth = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
   auth.searchParams.set("provider", "google");
   auth.searchParams.set("redirect_to", redirectTo);
