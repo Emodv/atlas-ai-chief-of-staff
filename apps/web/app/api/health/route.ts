@@ -1,5 +1,6 @@
 import { getVercelOidcToken } from "@vercel/oidc";
 import { NextResponse } from "next/server";
+import { getAtlasSession } from "../../../lib/atlas-auth";
 import { nativeGmailStatus } from "../../../lib/native-gmail";
 
 const providers = ["gmail", "calendar", "contacts", "drive", "notion", "hubspot"] as const;
@@ -26,6 +27,20 @@ async function memoryStatus(token: string) {
 }
 
 export async function GET() {
+  // Keep the public health surface intentionally non-sensitive. Detailed
+  // connector, memory, trust, and blocker state is available only to a
+  // signed-in Atlas user so uptime checks cannot become an intelligence leak.
+  const session = await getAtlasSession();
+  if (!session) {
+    return NextResponse.json({
+      status: "ok",
+      service: "atlas-ai-chief-of-staff",
+      version: "2.9",
+      interface: "chatgpt-app-mcp",
+      timestamp: new Date().toISOString(),
+    }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const token = await getVercelOidcToken();
   if (!token) {
     return NextResponse.json({ status: "degraded", service: "atlas-ai-chief-of-staff", blocker: "vercel-oidc-unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
