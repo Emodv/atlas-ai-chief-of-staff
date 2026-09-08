@@ -12,6 +12,7 @@ const PKCE_COOKIE = "atlas_google_pkce";
 const STATE_COOKIE = "atlas_google_state";
 const MODE_COOKIE = "atlas_google_auth_mode";
 const RETURN_COOKIE = "atlas_google_return";
+const DEFAULT_PRODUCTION_ORIGIN = "https://atlas.moda";
 
 function base64url(input: Buffer) {
   return input.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -27,6 +28,15 @@ function cookieOptions(maxAge = 60 * 10) {
   };
 }
 
+function productionOrigin() {
+  return (process.env.ATLAS_PUBLIC_ORIGIN?.trim() || DEFAULT_PRODUCTION_ORIGIN).replace(/\/$/, "");
+}
+
+function shouldDelegateToProduction(url: URL) {
+  const canonical = productionOrigin();
+  return url.origin !== canonical && (process.env.VERCEL_ENV === "preview" || url.hostname.endsWith(".vercel.app"));
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const workspace = url.searchParams.get("workspace") === "1";
@@ -36,6 +46,16 @@ export async function GET(request: Request) {
   const redirectTo = `${origin}/api/auth/google/callback`;
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
+  // Vercel preview deployments often do not receive production OAuth secrets and
+  // Google redirect URIs should remain stable. Instead of dead-ending users on a
+  // preview-only error page, continue the connection flow on the canonical app.
+  if ((!clientId || !clientSecret) && shouldDelegateToProduction(url)) {
+    const canonicalAuth = new URL("/api/auth/google", productionOrigin());
+    if (workspace) canonicalAuth.searchParams.set("workspace", "1");
+    if (returnTarget) canonicalAuth.searchParams.set("return", returnTarget);
+    return Response.redirect(canonicalAuth.toString(), 302);
+  }
 
   if (!clientId || !clientSecret) {
     const fallback = new URL("/google-unavailable", origin);
