@@ -35,6 +35,12 @@ function auth(ctx: any) {
   return { tenant, token };
 }
 
+function briefLine(item: any, fallback: string) {
+  const subject = item?.person_company ?? item?.company_name ?? item?.person_name ?? item?.description ?? fallback;
+  const action = item?.next_action ?? item?.recommended_action ?? item?.opportunity ?? item?.description ?? "Review this item";
+  return `${subject}: ${action}`;
+}
+
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const privateWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 
@@ -56,6 +62,55 @@ const mcpHandler = createMcpHandler((server) => {
     return {
       content: [{ type: "text", text: ok ? "Atlas Command Center ready" : "Atlas Command Center needs review" }],
       structuredContent: { ok, workspace: a.tenant.workspaceName, autonomyLevel: a.tenant.autonomyLevel, executionEnabled: a.tenant.executionEnabled, killSwitch: a.tenant.killSwitch, opportunities: opps.data ?? [], relationships: relationships.data ?? [], queue: queue.data ?? [], trustState: ok ? "Handled" : "Review" },
+    };
+  });
+
+  server.registerTool("atlas_daily_brief", {
+    title: "Atlas Daily Chief of Staff Brief",
+    description: "Use this by default when the user asks Atlas what to do today, asks for a morning briefing, wants to make money, protect revenue, follow up with people, or see what needs approval. Returns a compressed Chief-of-Staff brief instead of raw workspace data.",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(5).default(3) }),
+    outputSchema: baseOutput.extend({
+      makeMoney: z.array(z.record(z.string(), z.unknown())),
+      protectRevenue: z.array(z.record(z.string(), z.unknown())),
+      needsYou: z.array(z.record(z.string(), z.unknown())),
+      handled: z.array(z.record(z.string(), z.unknown())),
+      brief: z.string(),
+    }),
+    annotations: readOnly,
+  }, async ({ limit }, ctx: any) => {
+    const a = auth(ctx); if (!a) return needsWorkspace();
+    const [opps, relationships, queue] = await Promise.all([
+      atlasTenantRest(a.token, `atlas_opportunities?select=id,person_company,category,opportunity,priority,master_score,estimated_value,close_probability,expected_economic_value,economic_currency,economic_priority,income_stream,next_action,deadline,lifecycle_stage,action_risk,updated_at&status=eq.open&order=economic_priority.desc.nullslast,master_score.desc&limit=${Math.max(limit * 2, 6)}`),
+      atlasTenantRest(a.token, `atlas_relationships?select=id,person_name,company_name,relationship_type,relationship_score,relationship_momentum,economic_potential,probability,expected_value,attention_efficiency,relationship_priority,recommended_action,next_touch_at,status&status=in.(active,dormant)&order=relationship_priority.desc.nullslast&limit=${Math.max(limit * 2, 6)}`),
+      atlasTenantRest(a.token, `atlas_actions?select=id,action_type,description,decision,status,confidence,risk_level,requires_approval,connector,scheduled_for,created_at&status=in.(queued,awaiting_approval,verification_pending)&order=created_at.asc&limit=20`),
+    ]);
+    const ok = opps.ok && relationships.ok && queue.ok;
+    const opportunityRows = Array.isArray(opps.data) ? opps.data : [];
+    const relationshipRows = Array.isArray(relationships.data) ? relationships.data : [];
+    const queueRows = Array.isArray(queue.data) ? queue.data : [];
+
+    const makeMoney = opportunityRows.slice(0, limit);
+    const protectRevenue = relationshipRows
+      .filter((r: any) => r.status === "dormant" || r.relationship_momentum === "declining" || Number(r.relationship_score ?? 100) < 60)
+      .slice(0, limit);
+    const needsYou = queueRows.filter((q: any) => q.status === "awaiting_approval" || q.requires_approval === true).slice(0, limit);
+    const handled = queueRows.filter((q: any) => q.status === "queued" || q.status === "verification_pending").slice(0, limit);
+
+    const section = (title: string, rows: any[], fallback: string) => {
+      const lines = rows.length ? rows.map((item, index) => `${index + 1}. ${briefLine(item, fallback)}`) : ["None right now."];
+      return `${title}\n${lines.join("\n")}`;
+    };
+    const brief = [
+      section("MAKE MONEY", makeMoney, "Opportunity"),
+      section("PROTECT REVENUE", protectRevenue, "Relationship"),
+      section("NEEDS YOU", needsYou, "Approval"),
+      section("HANDLED", handled, "Action"),
+    ].join("\n\n");
+
+    const trust = !ok ? "Review" : needsYou.length ? "Review" : "Handled";
+    return {
+      content: [{ type: "text", text: brief }],
+      structuredContent: { ok, workspace: a.tenant.workspaceName, makeMoney, protectRevenue, needsYou, handled, brief, trustState: trust },
     };
   });
 
