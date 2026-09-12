@@ -22,19 +22,19 @@ export default function InvitePage() {
         <section style={{textAlign:'center'}}>
           <div style={{fontSize:12,letterSpacing:'.16em',color:'#9d85d9',marginBottom:14}}>YOUR AI CHIEF OF STAFF</div>
           <h1 style={{fontSize:'clamp(42px,8vw,72px)',lineHeight:1.02,letterSpacing:'-.05em',margin:'0 0 22px'}}>Less inbox.<br/><span style={{background:'linear-gradient(90deg,#fff 0%,#c66cff 55%,#745cff 100%)',WebkitBackgroundClip:'text',color:'transparent'}}>More judgment.</span></h1>
-          <p style={{maxWidth:650,margin:'0 auto 28px',color:'#aeb4c7',fontSize:'clamp(17px,3.8vw,22px)',lineHeight:1.55}}>Sign in with Google and connect the Workspace data Atlas needs to become useful: Gmail, Calendar, Contacts, Drive, Docs, and Sheets.</p>
+          <p style={{maxWidth:650,margin:'0 auto 28px',color:'#aeb4c7',fontSize:'clamp(17px,3.8vw,22px)',lineHeight:1.55}}>Sign in with Google and give Atlas read-only access to Gmail and Calendar — only what it needs to deliver your first useful scan.</p>
 
           <a href="/api/auth/google?workspace=1&return=onboarding" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,textDecoration:'none',color:'#111',fontSize:'clamp(18px,4vw,23px)',fontWeight:800,background:'#fff',borderRadius:22,padding:'20px 26px',boxShadow:'0 14px 50px rgba(109,76,255,.22)'}}>
             Continue with Google →
           </a>
           <a href="/login?mode=signup" style={{display:'inline-block',marginTop:16,color:'#b8a6ef',fontSize:14}}>Use email instead</a>
-          <div style={{marginTop:16,fontSize:12,color:'#747d91'}}>Google access is read-only during onboarding. Atlas cannot send, delete, or change your Google data from these permissions.</div>
+          <div style={{marginTop:16,fontSize:12,color:'#747d91'}}>Read-only during onboarding. Atlas cannot send, delete, or change your Google data from these permissions. More integrations are requested only when you choose to use them.</div>
         </section>
 
         <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:12,marginTop:42}}>
           {[
             ['1 · Sign in','Create or access your private Atlas workspace with Google.'],
-            ['2 · Connect','Approve read-only access to Gmail, Calendar, Contacts, Drive, Docs, and Sheets.'],
+            ['2 · Connect','Approve read-only Gmail and Calendar access for the first scan.'],
             ['3 · Teach','Tell Atlas what matters, what to protect, and how much autonomy to use.'],
             ['4 · First Scan','Atlas scans what you approved and surfaces the first high-value signals.'],
           ].map(([title,copy]) => <article key={title} style={{padding:20,border:'1px solid rgba(255,255,255,.08)',borderRadius:18,background:'rgba(12,15,29,.92)'}}><strong style={{display:'block',marginBottom:8}}>{title}</strong><span style={{color:'#9ba3b7',fontSize:13,lineHeight:1.5}}>{copy}</span></article>)}
