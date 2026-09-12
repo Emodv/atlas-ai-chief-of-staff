@@ -16,6 +16,14 @@
         "destructive_justification": "Does not delete, overwrite, revoke, send, publish, or transact."
       }
     },
+    "atlas_daily_brief": {
+      "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
+      "justifications": {
+        "read_only_justification": "Reads only the authenticated user's opportunities, relationship-risk signals, and private action queue to produce a concise daily Chief-of-Staff brief.",
+        "open_world_justification": "Reads Atlas-controlled private workspace data only and does not contact prospects, clients, or third-party systems.",
+        "destructive_justification": "Does not mutate, delete, send, publish, transact, or approve actions."
+      }
+    },
     "atlas_opportunities": {
       "annotations": { "readOnlyHint": true, "openWorldHint": false, "destructiveHint": false },
       "justifications": {
@@ -74,6 +82,14 @@
     }
   },
   "test_cases": [
+    {
+      "description": "Generate a compressed daily Chief-of-Staff brief.",
+      "user_prompt": "Atlas, give me my morning briefing.",
+      "file_attachment_urls": null,
+      "tools_triggered": "atlas_daily_brief",
+      "expected_output": "A concise private brief grouped into MAKE MONEY, PROTECT REVENUE, NEEDS YOU, and HANDLED, with no raw tables unless requested.",
+      "expected_output_url": null
+    },
     {
       "description": "Surface only the most important current signals.",
       "user_prompt": "Atlas, show me the highest-value signals that deserve my attention right now. Omit noise.",
